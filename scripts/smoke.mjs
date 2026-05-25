@@ -36,6 +36,19 @@ try {
   await page.getByTitle('Redo').click();
   await page.locator('td', { hasText: 'Smoke Revenue 7741' }).first().waitFor({ state: 'visible', timeout: 15000 });
 
+  await page.locator('.sheet-cell').nth(73).click();
+  await page.locator('.formula-bar input').fill('=PRODUCT(B2:C2)');
+  await page.locator('.formula-bar input').press('Enter');
+  await page.locator('td', { hasText: '20,000' }).first().waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('.sheet-cell').nth(74).click();
+  await page.locator('.formula-bar input').fill('=UNIQUECOUNT(A2:A6)');
+  await page.locator('.formula-bar input').press('Enter');
+  await page.locator('.formula-bar input').fill('=VLOOKUP("Cost",A2:C6,2,0)');
+  await page.locator('.formula-bar input').press('Enter');
+  await page.locator('.formula-bar input').fill('=PERCENTILE(B2:C2,0.5)');
+  await page.locator('.formula-bar input').press('Enter');
+  await page.locator('td', { hasText: '150' }).first().waitFor({ state: 'visible', timeout: 15000 });
+
   await page.locator('.sheet-find input').fill('Smoke Revenue 7741');
   await page.locator('.sheet-find', { hasText: '1/1' }).waitFor({ state: 'visible', timeout: 15000 });
   await page.locator('td.search-match', { hasText: 'Smoke Revenue 7741' }).waitFor({ state: 'visible', timeout: 15000 });
@@ -93,6 +106,21 @@ try {
     state: 'visible',
     timeout: 15000
   });
+  await page.getByRole('button', { name: 'PRODUCT', exact: true }).click();
+  await page.locator('.status-bar', { hasText: 'Inserted PRODUCT template' }).waitFor({
+    state: 'visible',
+    timeout: 15000
+  });
+  await page.getByRole('button', { name: 'STDEV', exact: true }).click();
+  await page.locator('.status-bar', { hasText: 'Inserted STDEV template' }).waitFor({
+    state: 'visible',
+    timeout: 15000
+  });
+  await page.getByRole('button', { name: 'UNIQUECOUNT', exact: true }).click();
+  await page.locator('.status-bar', { hasText: 'Inserted UNIQUECOUNT template' }).waitFor({
+    state: 'visible',
+    timeout: 15000
+  });
 
   await page.locator('.sheet-cell').nth(13).click();
   await page.locator('#cell-note').fill('Smoke note for the revenue assumption');
@@ -146,6 +174,20 @@ try {
   const htmlName = htmlDownload[0].suggestedFilename();
   if (!htmlName.endsWith('-report.html')) throw new Error(`Unexpected HTML report filename: ${htmlName}`);
 
+  const rawDownload = await Promise.all([
+    page.waitForEvent('download', { timeout: 15000 }),
+    page.getByRole('button', { name: 'Raw CSV' }).click()
+  ]);
+  const rawName = rawDownload[0].suggestedFilename();
+  if (!rawName.endsWith('-raw.csv')) throw new Error(`Unexpected raw filename: ${rawName}`);
+
+  const auditDownload = await Promise.all([
+    page.waitForEvent('download', { timeout: 15000 }),
+    page.getByRole('button', { name: 'Audit CSV' }).click()
+  ]);
+  const auditName = auditDownload[0].suggestedFilename();
+  if (!auditName.endsWith('-audit.csv')) throw new Error(`Unexpected audit filename: ${auditName}`);
+
   await page.locator('.sheet-cell').nth(13).click();
   await page.locator('.formula-bar input').fill('  1234  ');
   await page.locator('.formula-bar input').press('Enter');
@@ -174,6 +216,37 @@ try {
   await page.locator('.status-bar', { hasText: 'Filled' }).waitFor({ state: 'visible', timeout: 15000 });
   await page.getByRole('button', { name: 'Remove duplicates' }).click();
   await page.locator('.status-bar', { hasText: 'duplicate row' }).waitFor({ state: 'visible', timeout: 15000 });
+
+  await page.locator('.sheet-cell').nth(288).click();
+  await page.locator('.grid-wrap').evaluate((node) => {
+    const data = new DataTransfer();
+    data.setData('text/plain', 'Split Field\nEast / Enterprise\nWest / SMB');
+    node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await page.locator('.sheet-cell').nth(300).click();
+  await page.getByRole('button', { name: 'Split column' }).click();
+  await page.locator('.status-bar', { hasText: 'Split 2 rows' }).waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('td', { hasText: 'Enterprise' }).first().waitFor({ state: 'visible', timeout: 15000 });
+
+  await page.locator('.sheet-cell').nth(304).click();
+  await page.locator('.grid-wrap').evaluate((node) => {
+    const data = new DataTransfer();
+    data.setData('text/plain', 'step_value\tContext\n1\tx\n3\tx\n\tx\n\tx');
+    node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await page.locator('.sheet-cell').nth(316).click();
+  await page.getByRole('button', { name: 'Fill series' }).click();
+  await page.locator('.status-bar', { hasText: 'Filled 2 series cells' }).waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('td', { hasText: '7' }).first().waitFor({ state: 'visible', timeout: 15000 });
+
+  await page.getByRole('button', { name: 'Normalize headers' }).click();
+  await page.locator('.status-bar', { hasText: 'Normalized' }).waitFor({ state: 'visible', timeout: 15000 });
+  await page.getByRole('button', { name: 'Add totals' }).click();
+  await page.waitForTimeout(300);
+  const totalStatus = await page.locator('.status-bar').innerText();
+  if (!totalStatus.includes('Total row inserted')) throw new Error(`Add totals failed: ${totalStatus}`);
+  await page.locator('.schema-section', { hasText: 'Schema map' }).waitFor({ state: 'visible', timeout: 15000 });
+  await page.locator('.activity-log-section', { hasText: 'Activity log' }).waitFor({ state: 'visible', timeout: 15000 });
 
   await page.locator('.chart-controls select').first().selectOption('bar');
   await page.locator('.chart-controls select').nth(1).selectOption('0');
@@ -239,8 +312,14 @@ try {
   const modelOps = await page.locator('.ops-section').innerText();
   if (!modelOps.includes('Fill formula down')) throw new Error('Model ops controls did not render.');
 
+  await page.getByRole('button', { name: 'SaaS Metrics OS' }).click();
+  await page.waitForFunction(() => document.querySelector('.workbook-title')?.value === 'SaaS Metrics OS', null, {
+    timeout: 15000
+  });
+  await page.locator('td', { hasText: 'CAC Spend' }).first().waitFor({ state: 'visible', timeout: 15000 });
+
   console.log(
-    `Vectorsheets smoke passed: ${initialTitle} -> imported, SUMIF/COUNTIF evaluated, searched, filtered, validated, conditionally formatted, summarized, named ranges, formula templates, noted, formatted, sorted, edited rows, quick formulas, quality cleanup, versions, scenarios, report exports, charted, duplicated, generated, saved, forecasted.`
+    `Vectorsheets smoke passed: ${initialTitle} -> imported, formulas evaluated, searched, filtered, validated, conditionally formatted, summarized, named ranges, advanced formula templates, noted, formatted, sorted, edited rows, raw/audit exports, schema map, activity log, quality cleanup, totals, split columns, series fill, versions, scenarios, report exports, charted, duplicated, generated, saved, forecasted, operator templates.`
   );
 } finally {
   await browser.close();

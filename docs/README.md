@@ -10,7 +10,7 @@ This directory contains operator and engineering documentation for the Vectorshe
 
 ## Product Summary
 
-Vectorsheets is a spreadsheet workbench with a server-side AI workbook engine. The user can generate a workbook from a business prompt, edit the grid directly, inspect formulas, validate data, build summaries, chart results, save workbooks, and export reports.
+Vectorsheets is a spreadsheet workbench with a server-side AI workbook engine. The user can generate a workbook from a business prompt, load operator kits, edit the grid directly, inspect formulas, validate data, profile schema, build summaries, chart results, save workbooks, and export reports.
 
 The app intentionally keeps the interface close to spreadsheet patterns:
 
@@ -19,7 +19,7 @@ The app intentionally keeps the interface close to spreadsheet patterns:
 - Prompt command line.
 - Formula bar.
 - Grid.
-- Right inspector with tools and analysis.
+- Right inspector with tools, schema, activity, and analysis.
 
 ## Verification Standard
 

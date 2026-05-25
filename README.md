@@ -17,15 +17,17 @@ The product is designed to feel familiar to Excel users: a clean workbook list, 
 
 - Natural-language workbook generation.
 - Editable spreadsheet grid with formula bar.
-- Formula engine with references, ranges, arithmetic, comparisons, `IF`, `ROUND`, `ABS`, `SUM`, `AVERAGE`, `AVG`, `MIN`, `MAX`, `COUNT`, `MEDIAN`, `SUMIF`, `COUNTIF`, and `AVERAGEIF`.
+- Formula engine with references, ranges, arithmetic, comparisons, `IF`, `AND`, `OR`, `ROUND`, `ABS`, `SUM`, `PRODUCT`, `AVERAGE`, `AVG`, `MIN`, `MAX`, `COUNT`, `MEDIAN`, `STDEV`, `VAR`, `RANK`, `PERCENTILE`, `UNIQUECOUNT`, `VLOOKUP`, `SUMIF`, `COUNTIF`, and `AVERAGEIF`.
+- One-click operator kits for SaaS metrics, sales pipeline, and support SLA workbooks.
 - CSV import and paste-to-grid import.
-- CSV, JSON report, HTML report, and summary CSV export.
+- Evaluated CSV, raw formula CSV, audit CSV, JSON report, HTML report, and summary CSV export.
 - Undo and redo for workbook edits.
 - Workbook create, duplicate, save, delete, and refresh.
 - Find in sheet with highlighted matches.
 - Number, currency, and percent formatting.
 - Sort ascending/descending by selected column.
 - Insert, delete, and clear rows/columns.
+- Normalize headers, add formula-based totals, fill numeric series, and split delimited column values.
 - Move blank rows down.
 - Fill blanks down in selected column.
 - Remove duplicate rows by selected column.
@@ -36,8 +38,10 @@ The product is designed to feel familiar to Excel users: a clean workbook list, 
 - Summary writeback to the sheet.
 - Summary chart generation.
 - Named ranges saved per workbook with one-click SUM insertion.
-- Formula templates for `SUMIF`, `COUNTIF`, `AVERAGEIF`, `IF`, and `ROUND`.
+- Formula templates for `SUMIF`, `COUNTIF`, `AVERAGEIF`, `IF`, `ROUND`, `PRODUCT`, `STDEV`, `RANK`, `UNIQUECOUNT`, and `VLOOKUP`.
 - Workbook health diagnostics for formula errors, validation issues, named ranges, and summary readiness.
+- Schema map for column type, fill, uniqueness, and formula profiling.
+- Local activity log for recent workbook operations.
 - AI runtime panel with provider, model, auth mode, runtime, and latest cloud error.
 - Chart configuration for bar and line charts.
 - Forecast writeback from chart trend.
@@ -223,6 +227,7 @@ The smoke test covers:
 - Loading the app.
 - CSV import.
 - Formula evaluation including `SUMIF` and `COUNTIF`.
+- Expanded formula evaluation including `PRODUCT`, `UNIQUECOUNT`, `VLOOKUP`, and `PERCENTILE`.
 - Undo and redo.
 - Sheet search.
 - Filtering.
@@ -232,12 +237,15 @@ The smoke test covers:
 - Summary export.
 - Named ranges.
 - Formula templates.
+- Raw CSV and audit CSV export.
+- Schema map and activity log.
 - Notes.
 - Number formatting.
 - Sorting.
 - Row editing.
 - Quick formulas.
 - Data cleanup.
+- Totals, split columns, and series fill.
 - Version snapshots.
 - Scenario presets.
 - JSON and HTML report exports.
@@ -246,6 +254,7 @@ The smoke test covers:
 - Prompt generation.
 - Save.
 - Forecast writeback.
+- Operator kit template loading.
 
 ## Documentation
 

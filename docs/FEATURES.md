@@ -15,6 +15,12 @@ Supported local workbook templates include:
 - Support operations command center.
 - Operating priority model.
 
+Operator kits can also be loaded directly from the sidebar without calling AI:
+
+- SaaS Metrics OS.
+- Pipeline Command Center.
+- Support SLA Control.
+
 ## Spreadsheet Editing
 
 The grid supports:
@@ -46,6 +52,15 @@ Supported formulas:
 - `ABS`
 - `ROUND`
 - `IF`
+- `AND`
+- `OR`
+- `PRODUCT`
+- `STDEV`
+- `VAR`
+- `RANK`
+- `PERCENTILE`
+- `UNIQUECOUNT`
+- `VLOOKUP`
 - `SUMIF`
 - `COUNTIF`
 - `AVERAGEIF`
@@ -64,6 +79,10 @@ Data tools operate on the selected row or column:
 - Delete column.
 - Clear row.
 - Clear column.
+- Normalize headers.
+- Add formula-based totals.
+- Fill numeric series from two starting values.
+- Split comma, slash, pipe, semicolon, or double-space delimited column values.
 - Fill blanks down.
 - Remove duplicate rows.
 - Move blank rows down.
@@ -141,8 +160,30 @@ Formula templates provide one-click insertion for more advanced formulas:
 - `AVERAGEIF`
 - `IF`
 - `ROUND`
+- `PRODUCT`
+- `STDEV`
+- `RANK`
+- `UNIQUECOUNT`
+- `VLOOKUP`
 
 Templates use the current workbook context where possible, including the Summary Builder group/value columns and selected column data range.
+
+## Schema Map
+
+The Schema Map profiles filled columns so users can inspect:
+
+- Column letter.
+- Header.
+- Detected type.
+- Filled count.
+- Unique value count.
+- Formula count.
+
+Clicking a schema row selects that column in the grid.
+
+## Activity Log
+
+The Activity Log stores recent local workbook operations in browser storage. It records the action label, timestamp, and filled-cell count, and is included in JSON and HTML reports.
 
 ## Workbook Health
 
@@ -208,8 +249,10 @@ These are keyed by workbook ID when available, or by the local draft key.
 Exports include:
 
 - CSV workbook export.
+- Raw formula CSV export.
+- Audit CSV export with formula, error, and schema rows.
 - JSON workbook report.
 - HTML workbook report.
 - Summary CSV export.
 
-Reports include workbook metadata, stats, audit output, validation status, summary rows, chart configuration, scenarios, notes, and grid data.
+Reports include workbook metadata, stats, audit output, validation status, schema map, activity log, summary rows, chart configuration, scenarios, notes, and grid data.

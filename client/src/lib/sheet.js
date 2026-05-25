@@ -192,6 +192,13 @@ function median(values) {
   return sorted.length % 2 ? sorted[midpoint] : (sorted[midpoint - 1] + sorted[midpoint]) / 2;
 }
 
+function variance(values, sample = true) {
+  if (!values.length || (sample && values.length < 2)) return 0;
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const divisor = sample ? values.length - 1 : values.length;
+  return values.reduce((sum, value) => sum + (value - average) ** 2, 0) / divisor;
+}
+
 function stripCriterion(input) {
   return String(input || '').trim().replace(/^["']|["']$/g, '');
 }
@@ -245,8 +252,118 @@ function conditionalAggregate(grid, args, visiting, evaluateCell, mode) {
   return matched.reduce((sum, value) => sum + value, 0);
 }
 
+function scalarValue(grid, input, visiting, evaluateCell) {
+  const source = String(input || '').trim();
+  const quoted = /^["'].*["']$/.test(source);
+  if (quoted) return stripCriterion(source);
+
+  const ref = parseRefToken(source);
+  if (ref) return evaluateCell(grid, ref.row, ref.col, visiting);
+
+  const numeric = parseNumberLiteral(source);
+  if (Number.isFinite(numeric)) return numeric;
+
+  try {
+    return evaluateExpression(grid, source, visiting, evaluateCell);
+  } catch {
+    return stripCriterion(source);
+  }
+}
+
+function comparableValue(value, raw = '') {
+  if (typeof value === 'number' && Number.isFinite(value)) return { kind: 'number', value };
+  const numeric = parseNumberLiteral(raw);
+  if (Number.isFinite(numeric)) return { kind: 'number', value: numeric };
+  return { kind: 'text', value: String(value ?? raw ?? '').trim().toLowerCase() };
+}
+
+function sameComparable(a, b) {
+  if (a.kind === 'number' && b.kind === 'number') return a.value === b.value;
+  return String(a.value).toLowerCase() === String(b.value).toLowerCase();
+}
+
+function uniqueCount(grid, input, visiting, evaluateCell) {
+  const cells = rangeCells(grid, input, visiting, evaluateCell);
+  const values = new Set();
+
+  cells.forEach((cell) => {
+    const raw = String(cell.raw || '').trim();
+    const rendered = String(cell.value ?? '').trim();
+    if (!raw && !rendered) return;
+    values.add(`${typeof cell.value}:${rendered.toLowerCase()}`);
+  });
+
+  return values.size;
+}
+
+function rankValue(grid, args, visiting, evaluateCell) {
+  const target = numericExpression(grid, args[0], visiting, evaluateCell);
+  const values = rangeValues(grid, args[1], visiting, evaluateCell);
+  const ascending = numericExpression(grid, args[2] || '0', visiting, evaluateCell) > 0;
+  const sorted = [...values].sort((a, b) => (ascending ? a - b : b - a));
+  const index = sorted.findIndex((value) => value === target);
+  return index < 0 ? 0 : index + 1;
+}
+
+function percentileValue(grid, args, visiting, evaluateCell) {
+  const values = rangeValues(grid, args[0], visiting, evaluateCell).sort((a, b) => a - b);
+  if (!values.length) return 0;
+
+  const percentile = Math.max(0, Math.min(1, numericExpression(grid, args[1] || '0', visiting, evaluateCell)));
+  const position = (values.length - 1) * percentile;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  if (lower === upper) return values[lower];
+  return values[lower] + (values[upper] - values[lower]) * (position - lower);
+}
+
+function vlookupValue(grid, args, visiting, evaluateCell) {
+  const table = parseRangeToken(args[1]);
+  if (!table) return 0;
+
+  const lookup = comparableValue(scalarValue(grid, args[0], visiting, evaluateCell), args[0]);
+  const columnOffset = Math.max(1, Math.round(numericExpression(grid, args[2] || '1', visiting, evaluateCell))) - 1;
+  const targetCol = table.start.col + columnOffset;
+  if (targetCol > table.end.col) return 0;
+
+  for (let row = table.start.row; row <= table.end.row; row += 1) {
+    const raw = String(grid[row]?.[table.start.col] || '').trim();
+    const value = evaluateCell(grid, row, table.start.col, visiting);
+    if (!sameComparable(comparableValue(value, raw), lookup)) continue;
+
+    const result = evaluateCell(grid, row, targetCol, visiting);
+    if (typeof result === 'number' && Number.isFinite(result)) return result;
+    return parseNumberLiteral(grid[row]?.[targetCol]);
+  }
+
+  return 0;
+}
+
 function expandFunctions(grid, expression, visiting, evaluateCell) {
-  const functions = ['SUMIF', 'COUNTIF', 'AVERAGEIF', 'SUM', 'AVERAGE', 'AVG', 'MIN', 'MAX', 'COUNT', 'MEDIAN', 'ABS', 'ROUND', 'IF'];
+  const functions = [
+    'AVERAGEIF',
+    'UNIQUECOUNT',
+    'PERCENTILE',
+    'VLOOKUP',
+    'COUNTIF',
+    'PRODUCT',
+    'MEDIAN',
+    'STDEV',
+    'SUMIF',
+    'AVERAGE',
+    'COUNT',
+    'ROUND',
+    'RANK',
+    'SUM',
+    'AVG',
+    'MIN',
+    'MAX',
+    'VAR',
+    'ABS',
+    'AND',
+    'OR',
+    'IF'
+  ];
   let next = expression;
   let changed = true;
 
@@ -260,7 +377,7 @@ function expandFunctions(grid, expression, visiting, evaluateCell) {
       const args = splitFormulaArgs(match[1]);
       let result = 0;
 
-      if (['SUM', 'AVERAGE', 'AVG', 'MIN', 'MAX', 'COUNT', 'MEDIAN'].includes(upper)) {
+      if (['SUM', 'AVERAGE', 'AVG', 'MIN', 'MAX', 'COUNT', 'MEDIAN', 'PRODUCT', 'STDEV', 'VAR'].includes(upper)) {
         const values = rangeValues(grid, match[1], visiting, evaluateCell);
         if (upper === 'SUM') result = values.reduce((sum, value) => sum + value, 0);
         if (upper === 'AVERAGE' || upper === 'AVG') {
@@ -270,13 +387,22 @@ function expandFunctions(grid, expression, visiting, evaluateCell) {
         if (upper === 'MAX') result = values.length ? Math.max(...values) : 0;
         if (upper === 'COUNT') result = values.length;
         if (upper === 'MEDIAN') result = median(values);
+        if (upper === 'PRODUCT') result = values.length ? values.reduce((product, value) => product * value, 1) : 0;
+        if (upper === 'STDEV') result = Math.sqrt(variance(values));
+        if (upper === 'VAR') result = variance(values);
       }
 
       if (['SUMIF', 'COUNTIF', 'AVERAGEIF'].includes(upper)) {
         result = conditionalAggregate(grid, args, visiting, evaluateCell, upper);
       }
 
+      if (upper === 'UNIQUECOUNT') result = uniqueCount(grid, match[1], visiting, evaluateCell);
+      if (upper === 'RANK') result = rankValue(grid, args, visiting, evaluateCell);
+      if (upper === 'PERCENTILE') result = percentileValue(grid, args, visiting, evaluateCell);
+      if (upper === 'VLOOKUP') result = vlookupValue(grid, args, visiting, evaluateCell);
       if (upper === 'ABS') result = Math.abs(numericExpression(grid, args[0], visiting, evaluateCell));
+      if (upper === 'AND') result = args.every((arg) => numericExpression(grid, arg, visiting, evaluateCell)) ? 1 : 0;
+      if (upper === 'OR') result = args.some((arg) => numericExpression(grid, arg, visiting, evaluateCell)) ? 1 : 0;
 
       if (upper === 'ROUND') {
         const precision = Math.max(0, Math.min(6, Math.round(numericExpression(grid, args[1] || '0', visiting, evaluateCell))));

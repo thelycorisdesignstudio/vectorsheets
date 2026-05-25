@@ -56,6 +56,48 @@ const suggestions = [
   'Build a personal monthly budget for a household of 4 with categories and totals'
 ];
 
+const workbookTemplates = [
+  {
+    name: 'SaaS Metrics OS',
+    description: 'ARR, churn, LTV, CAC, payback, and expansion formulas.',
+    rows: [
+      ['Metric', 'Jan', 'Feb', 'Mar', 'Q1 Total', 'Formula check'],
+      ['New MRR', '42000', '48000', '56000', '=SUM(B2:D2)', '=ROUND(E2/3,0)'],
+      ['Expansion MRR', '9000', '12000', '15000', '=SUM(B3:D3)', '=MAX(B3:D3)'],
+      ['Churned MRR', '-8000', '-9000', '-7000', '=SUM(B4:D4)', '=MIN(B4:D4)'],
+      ['Net New MRR', '=SUM(B2:B4)', '=SUM(C2:C4)', '=SUM(D2:D4)', '=SUM(B5:D5)', '=STDEV(B5:D5)'],
+      ['CAC Spend', '38000', '42000', '47000', '=SUM(B6:D6)', '=AVERAGE(B6:D6)'],
+      ['New Customers', '42', '46', '51', '=SUM(B7:D7)', '=ROUND(E6/E7,0)'],
+      ['ARPA', '=ROUND(B2/B7,0)', '=ROUND(C2/C7,0)', '=ROUND(D2/D7,0)', '=ROUND(E2/E7,0)', '=RANK(E7,E2:E7,0)']
+    ]
+  },
+  {
+    name: 'Pipeline Command Center',
+    description: 'Weighted pipeline, owner performance, and stage risk.',
+    rows: [
+      ['Owner', 'Segment', 'Stage', 'Pipeline', 'Probability', 'Weighted', 'Priority'],
+      ['Avery', 'Enterprise', 'Proposal', '180000', '0.55', '=D2*E2', '=IF(F2>90000,1,0)'],
+      ['Mina', 'Mid-market', 'Discovery', '76000', '0.28', '=D3*E3', '=IF(F3>90000,1,0)'],
+      ['Sol', 'Enterprise', 'Negotiation', '230000', '0.72', '=D4*E4', '=IF(F4>90000,1,0)'],
+      ['Iris', 'SMB', 'Demo', '32000', '0.35', '=D5*E5', '=IF(F5>90000,1,0)'],
+      ['Noor', 'Mid-market', 'Proposal', '92000', '0.48', '=D6*E6', '=IF(F6>90000,1,0)'],
+      ['Total', '', '', '=SUM(D2:D6)', '', '=SUM(F2:F6)', '=COUNTIF(G2:G6,">0")']
+    ]
+  },
+  {
+    name: 'Support SLA Control',
+    description: 'Ticket load, staffing pressure, breaches, and SLA coverage.',
+    rows: [
+      ['Queue', 'Tickets', 'Avg Minutes', 'Agents', 'Capacity', 'Gap', 'SLA Risk'],
+      ['Billing', '148', '18', '5', '=D2*24', '=B2-E2', '=IF(F2>0,1,0)'],
+      ['Technical', '220', '31', '7', '=D3*18', '=B3-E3', '=IF(F3>0,1,0)'],
+      ['Onboarding', '92', '24', '4', '=D4*20', '=B4-E4', '=IF(F4>0,1,0)'],
+      ['Enterprise', '74', '42', '3', '=D5*14', '=B5-E5', '=IF(F5>0,1,0)'],
+      ['SLA Summary', '=SUM(B2:B5)', '=AVERAGE(C2:C5)', '=SUM(D2:D5)', '=SUM(E2:E5)', '=SUM(F2:F5)', '=SUM(G2:G5)']
+    ]
+  }
+];
+
 const missions = [
   ['Generate', 'Turn plain language into a structured workbook with formulas.'],
   ['Audit', 'Expose assumptions, references, totals, and broken formulas.'],
@@ -277,6 +319,23 @@ function writeNamedRanges(workbook, ranges) {
   localStorage.setItem(namedRangesKey(workbook), JSON.stringify(ranges.slice(0, 12)));
 }
 
+function activityLogKey(workbook) {
+  return `vectorsheets:activity:${workbook.id || 'local-draft'}`;
+}
+
+function readActivityLog(workbook) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(activityLogKey(workbook)) || '[]');
+    return Array.isArray(parsed) ? parsed.slice(0, 20) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeActivityLog(workbook, entries) {
+  localStorage.setItem(activityLogKey(workbook), JSON.stringify(entries.slice(0, 20)));
+}
+
 function columnQuality(grid, col) {
   const counts = new Map();
   const numeric = [];
@@ -429,6 +488,48 @@ function buildPivotSummary(grid, labelCol, valueCol) {
   return { labelHeader, valueHeader, rows, total };
 }
 
+function buildSchemaProfile(grid) {
+  return Array.from({ length: COLS }, (_, col) => {
+    const header = String(grid[0]?.[col] || columnName(col)).trim() || columnName(col);
+    const unique = new Set();
+    let filled = 0;
+    let numeric = 0;
+    let formulas = 0;
+    let text = 0;
+    let sample = '';
+
+    for (let row = 1; row < ROWS; row += 1) {
+      const raw = String(grid[row]?.[col] || '').trim();
+      if (!raw) continue;
+      filled += 1;
+      unique.add(raw.toLowerCase());
+      if (!sample) sample = displayValue(grid, row, col);
+      if (raw.startsWith('=')) formulas += 1;
+      const value = evaluateCell(grid, row, col, new Set());
+      if (typeof value === 'number' && Number.isFinite(value)) numeric += 1;
+      else text += 1;
+    }
+
+    let type = 'Blank';
+    if (filled && formulas === filled) type = 'Formula';
+    else if (filled && numeric === filled) type = 'Number';
+    else if (filled && text === filled) type = 'Text';
+    else if (filled) type = 'Mixed';
+
+    return {
+      col,
+      column: columnName(col),
+      header,
+      type,
+      filled,
+      blanks: Math.max(0, ROWS - 1 - filled),
+      unique: unique.size,
+      formulas,
+      sample
+    };
+  });
+}
+
 function bestSummaryConfig(grid) {
   const profiles = Array.from({ length: COLS }, (_, col) => {
     let numeric = 0;
@@ -472,6 +573,13 @@ function csvEscape(value) {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+function exportRawCsv(grid) {
+  return grid
+    .filter((row, index) => index < 6 || row.some((cell) => String(cell || '').trim()))
+    .map((row) => row.map(csvEscape).join(','))
+    .join('\n');
+}
+
 function dataRangeForColumn(grid, col) {
   const rows = [];
   for (let row = 1; row < ROWS; row += 1) {
@@ -490,6 +598,15 @@ function cleanFormulaCriterion(value) {
   return String(value || '')
     .replace(/"/g, '""')
     .trim();
+}
+
+function normalizeHeaderLabel(value, fallback) {
+  const cleaned = String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return fallback;
+  return cleaned.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).slice(0, 42);
 }
 
 function WorkbookChart({ workbook, grid }) {
@@ -671,6 +788,7 @@ export default function App() {
   const [noteDraft, setNoteDraft] = useState('');
   const [namedRanges, setNamedRanges] = useState([]);
   const [namedRangeName, setNamedRangeName] = useState('');
+  const [activityLog, setActivityLog] = useState([]);
   const [filterText, setFilterText] = useState('');
   const [conditionalRule, setConditionalRule] = useState('none');
   const [validationRule, setValidationRule] = useState('none');
@@ -684,6 +802,7 @@ export default function App() {
   const cellProfile = useMemo(() => selectedCellProfile(grid, selected.row, selected.col), [grid, selected]);
   const selectedColumn = useMemo(() => columnProfile(grid, selected.col), [grid, selected.col]);
   const selectedQuality = useMemo(() => columnQuality(grid, selected.col), [grid, selected.col]);
+  const schemaProfile = useMemo(() => buildSchemaProfile(grid), [grid]);
   const visibleRows = useMemo(() => filteredRowsForColumn(grid, selected.col, filterText), [grid, selected.col, filterText]);
   const dataRowCount = useMemo(() => grid.slice(1).filter(rowHasData).length, [grid]);
   const conditionalSet = useMemo(
@@ -721,9 +840,14 @@ export default function App() {
         label: 'Summary rows',
         value: pivotSummary.rows.length,
         status: pivotSummary.rows.length ? 'ok' : 'watch'
+      },
+      {
+        label: 'Typed columns',
+        value: schemaProfile.filter((column) => column.filled && column.type !== 'Mixed').length,
+        status: schemaProfile.some((column) => column.filled && column.type === 'Mixed') ? 'watch' : 'ok'
       }
     ],
-    [audit.errors.length, namedRanges.length, pivotSummary.rows.length, validationSet.size]
+    [audit.errors.length, namedRanges.length, pivotSummary.rows.length, schemaProfile, validationSet.size]
   );
   const assistantNotes = useMemo(() => {
     const notes = [];
@@ -733,10 +857,11 @@ export default function App() {
     if (selectedQuality.blanks > 8) notes.push(`Column ${columnName(selected.col)} has many blanks. Move blank rows down or clear unused rows.`);
     if (selectedQuality.duplicates) notes.push(`Column ${columnName(selected.col)} has ${selectedQuality.duplicates} duplicate value${selectedQuality.duplicates === 1 ? '' : 's'}.`);
     if (selectedQuality.outliers) notes.push(`${selectedQuality.outliers} numeric outlier${selectedQuality.outliers === 1 ? '' : 's'} found in the selected column.`);
+    if (schemaProfile.some((column) => column.filled && column.type === 'Mixed')) notes.push('Schema map found mixed-type columns. Convert numbers or split dirty fields before exporting.');
     if (!stats.formulas) notes.push('Add formulas so the model is auditable instead of static.');
     if (!notes.length) notes.push('This sheet is structured cleanly. Save a version before larger edits.');
     return notes.slice(0, 3);
-  }, [audit.errors.length, pivotSummary, selected.col, selectedQuality, stats.formulas, validationSet.size]);
+  }, [audit.errors.length, pivotSummary, schemaProfile, selected.col, selectedQuality, stats.formulas, validationSet.size]);
   const selectedRaw = grid[selected.row]?.[selected.col] || '';
   const selectedValue = evaluateCell(grid, selected.row, selected.col, new Set());
   const totalValue = series.reduce((sum, point) => sum + point.value, 0);
@@ -801,6 +926,7 @@ export default function App() {
     setNotes(readNotes(active));
     setSavedScenarios(readScenarios(active));
     setNamedRanges(readNamedRanges(active));
+    setActivityLog(readActivityLog(active));
   }, [active.id]);
 
   useEffect(() => {
@@ -837,6 +963,15 @@ export default function App() {
       activity: { ...current.activity, lastAction },
       updatedAt: new Date().toISOString()
     });
+    const logEntry = {
+      id: String(Date.now()),
+      at: new Date().toISOString(),
+      action: lastAction,
+      filled: gridStats(next.grid || current.grid).filled
+    };
+    const nextLog = [logEntry, ...readActivityLog(current)].slice(0, 20);
+    writeActivityLog(current, nextLog);
+    setActivityLog(nextLog);
     setDirty(true);
     if (noticeText) setNotice(noticeText);
   }, []);
@@ -1193,6 +1328,63 @@ export default function App() {
     link.click();
     URL.revokeObjectURL(url);
     setNotice('CSV exported.');
+  }
+
+  function downloadRawCsv() {
+    const blob = new Blob([exportRawCsv(grid)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${active.name || 'vectorsheet'}-raw.csv`.replace(/[^\w.-]+/g, '-').toLowerCase();
+    link.click();
+    URL.revokeObjectURL(url);
+    setNotice('Raw formula CSV exported.');
+  }
+
+  function exportAuditCsv() {
+    const rows = [
+      ['Type', 'Ref', 'Raw', 'Rendered', 'Column'],
+      ...audit.formulas.map((formula) => ['Formula', formula.ref, formula.raw, formula.value, formula.ref.replace(/\d+/g, '')]),
+      ...audit.errors.map((error) => ['Error', error.ref, error.raw, error.value, error.ref.replace(/\d+/g, '')]),
+      ...schemaProfile
+        .filter((column) => column.filled)
+        .map((column) => ['Schema', column.column, column.header, column.type, `${column.filled} filled / ${column.unique} unique`])
+    ];
+    const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${active.name || 'vectorsheet'}-audit.csv`.replace(/[^\w.-]+/g, '-').toLowerCase();
+    link.click();
+    URL.revokeObjectURL(url);
+    setNotice('Audit CSV exported.');
+  }
+
+  function loadWorkbookTemplate(template) {
+    const nextGrid = gridFromRows(template.rows, { row: 0, col: 0 }, emptyGrid());
+    const nextSummary = bestSummaryConfig(nextGrid);
+    commitWorkbookChange(
+      (draft) => ({
+        ...draft,
+        name: template.name,
+        prompt: template.description,
+        grid: nextGrid,
+        summary: template.description,
+        chart: {
+          type: 'bar',
+          labelColumn: nextSummary.labelCol,
+          valueColumn: nextSummary.valueCol,
+          title: template.name
+        },
+        tags: [...new Set([...(draft.tags || []), 'template', 'operator-kit'])].slice(0, 8)
+      }),
+      `Loaded ${template.name} template`,
+      `${template.name} template loaded.`
+    );
+    setSummaryConfig(nextSummary);
+    setPrompt(template.description);
+    setSelected({ row: 0, col: 0 });
   }
 
   function updateChartSetting(nextChart, action = 'Updated chart settings') {
@@ -1601,6 +1793,165 @@ export default function App() {
     );
   }
 
+  function normalizeHeaders() {
+    const nextGrid = cloneGrid(grid);
+    let changed = 0;
+
+    for (let col = 0; col < COLS; col += 1) {
+      const hasData = nextGrid.some((row, index) => index > 0 && String(row[col] || '').trim());
+      if (!hasData && !String(nextGrid[0][col] || '').trim()) continue;
+      const nextLabel = normalizeHeaderLabel(nextGrid[0][col], `Column ${columnName(col)}`);
+      if (nextGrid[0][col] !== nextLabel) {
+        nextGrid[0][col] = nextLabel;
+        changed += 1;
+      }
+    }
+
+    if (!changed) {
+      setNotice('Headers already look normalized.');
+      return;
+    }
+
+    commitWorkbookChange(
+      (draft) => ({ ...draft, grid: nextGrid }),
+      `Normalized ${changed} headers`,
+      `Normalized ${changed} header${changed === 1 ? '' : 's'}.`
+    );
+  }
+
+  function addTotalRow() {
+    const dataRows = [];
+    for (let row = 1; row < ROWS; row += 1) {
+      const firstCell = String(grid[row]?.[0] || '').trim().toLowerCase();
+      if (rowHasData(grid[row]) && !firstCell.includes('total') && !firstCell.includes('summary')) dataRows.push(row);
+    }
+
+    if (!dataRows.length) {
+      setNotice('Add data rows before inserting totals.');
+      return;
+    }
+
+    const lastRow = Math.max(...dataRows);
+    const writeRow = grid.findIndex((row, index) => index > lastRow && row.every((cell) => !String(cell || '').trim()));
+    if (writeRow < 1) {
+      setNotice('No blank row is available for totals.');
+      return;
+    }
+
+    const numericColumns = [];
+    for (let col = 0; col < COLS; col += 1) {
+      const numericCount = dataRows.filter((row) => typeof evaluateCell(grid, row, col, new Set()) === 'number').length;
+      if (numericCount > 0) numericColumns.push(col);
+    }
+
+    if (!numericColumns.length) {
+      setNotice('No numeric columns are available for totals.');
+      return;
+    }
+
+    commitWorkbookChange(
+      (draft) => {
+        draft.grid[writeRow] = Array(COLS).fill('');
+        draft.grid[writeRow][0] = 'Total';
+        numericColumns.forEach((col) => {
+          draft.grid[writeRow][col] = `=SUM(${cellId(Math.min(...dataRows), col)}:${cellId(lastRow, col)})`;
+        });
+        return draft;
+      },
+      `Added total row ${writeRow + 1}`,
+      `Total row inserted at row ${writeRow + 1}.`
+    );
+    setSelected({ row: writeRow, col: numericColumns[0] || 0 });
+  }
+
+  function fillNumberSeries() {
+    const numericRows = [];
+    for (let row = 1; row < ROWS; row += 1) {
+      const raw = String(grid[row]?.[selected.col] || '').trim();
+      if (!raw || raw.startsWith('=')) continue;
+      const value = evaluateCell(grid, row, selected.col, new Set());
+      if (typeof value === 'number' && Number.isFinite(value)) numericRows.push({ row, value });
+      if (numericRows.length === 2) break;
+    }
+
+    if (numericRows.length < 2) {
+      setNotice('Type two starting numbers in the selected column before filling a series.');
+      return;
+    }
+
+    const step = numericRows[1].value - numericRows[0].value;
+    const nextGrid = cloneGrid(grid);
+    let nextValue = numericRows[1].value;
+    let changed = 0;
+
+    for (let row = numericRows[1].row + 1; row < ROWS; row += 1) {
+      if (!rowHasData(nextGrid[row])) break;
+      const current = String(nextGrid[row][selected.col] || '').trim();
+      if (current) continue;
+      nextValue += step;
+      nextGrid[row][selected.col] = String(nextValue);
+      changed += 1;
+    }
+
+    if (!changed) {
+      setNotice('No blank cells with row context are available for the series.');
+      return;
+    }
+
+    commitWorkbookChange(
+      (draft) => ({ ...draft, grid: nextGrid }),
+      `Filled number series in column ${columnName(selected.col)}`,
+      `Filled ${changed} series cell${changed === 1 ? '' : 's'} in column ${columnName(selected.col)}.`
+    );
+  }
+
+  function splitSelectedColumn() {
+    if (selected.col >= COLS - 1) {
+      setNotice('Select a column with empty columns to the right before splitting.');
+      return;
+    }
+
+    const nextGrid = cloneGrid(grid);
+    let changed = 0;
+
+    for (let row = 1; row < ROWS; row += 1) {
+      const raw = String(nextGrid[row][selected.col] || '').trim();
+      if (!raw || raw.startsWith('=')) continue;
+
+      const delimiter = raw.includes('|')
+        ? /\s*\|\s*/
+        : raw.includes(';')
+          ? /\s*;\s*/
+          : raw.includes('/')
+            ? /\s*\/\s*/
+            : raw.includes(',')
+              ? /\s*,\s*/
+              : /\s{2,}/;
+      const parts = raw.split(delimiter).map((part) => part.trim()).filter(Boolean);
+      if (parts.length < 2) continue;
+
+      parts.slice(0, COLS - selected.col).forEach((part, offset) => {
+        nextGrid[row][selected.col + offset] = part;
+      });
+      changed += 1;
+    }
+
+    if (!changed) {
+      setNotice('No split-ready values found. Use comma, slash, pipe, semicolon, or double spaces.');
+      return;
+    }
+
+    if (!String(nextGrid[0][selected.col + 1] || '').trim()) {
+      nextGrid[0][selected.col + 1] = `${nextGrid[0][selected.col] || columnName(selected.col)} Detail`;
+    }
+
+    commitWorkbookChange(
+      (draft) => ({ ...draft, grid: nextGrid }),
+      `Split column ${columnName(selected.col)}`,
+      `Split ${changed} row${changed === 1 ? '' : 's'} in column ${columnName(selected.col)}.`
+    );
+  }
+
   function writePivotSummaryToSheet(chartAfterWrite = false) {
     if (!pivotSummary.rows.length) {
       setNotice('Choose a text group column and a numeric value column before writing a summary.');
@@ -1726,6 +2077,23 @@ export default function App() {
     }
     if (kind === 'ROUND') {
       formula = `=ROUND(${cellId(selected.row, selected.col)},2)`;
+    }
+    if (kind === 'PRODUCT' && selectedRange) {
+      formula = `=PRODUCT(${selectedRange.ref})`;
+    }
+    if (kind === 'STDEV' && selectedRange) {
+      formula = `=STDEV(${selectedRange.ref})`;
+    }
+    if (kind === 'RANK' && selectedRange) {
+      formula = `=RANK(${cellId(selected.row, selected.col)},${selectedRange.ref},0)`;
+    }
+    if (kind === 'UNIQUECOUNT' && selectedRange) {
+      formula = `=UNIQUECOUNT(${selectedRange.ref})`;
+    }
+    if (kind === 'VLOOKUP' && labelRange && valueRange && summaryConfig.labelCol < summaryConfig.valueCol) {
+      const tableRange = `${cellId(labelRange.startRow, summaryConfig.labelCol)}:${cellId(labelRange.endRow, summaryConfig.valueCol)}`;
+      const offset = Math.abs(summaryConfig.valueCol - summaryConfig.labelCol) + 1;
+      formula = `=VLOOKUP(${cellId(Math.max(1, selected.row), summaryConfig.labelCol)},${tableRange},${offset},0)`;
     }
 
     if (!formula) {
@@ -1868,9 +2236,11 @@ export default function App() {
         total: pivotSummary.total,
         rows: pivotSummary.rows
       },
+      schema: schemaProfile,
       chart: active.chart,
       scenarios: savedScenarios,
       namedRanges,
+      activityLog,
       notes,
       grid
     };
@@ -1924,6 +2294,18 @@ export default function App() {
           `<tr><td>${escapeHtml(row.label)}</td><td>${row.count}</td><td>${escapeHtml(metricLabel(row.sum))}</td><td>${escapeHtml(metricLabel(row.avg))}</td></tr>`
       )
       .join('');
+    const schemaRows = schemaProfile
+      .filter((column) => column.filled)
+      .slice(0, 12)
+      .map(
+        (column) =>
+          `<tr><td>${escapeHtml(column.column)}</td><td>${escapeHtml(column.header)}</td><td>${escapeHtml(column.type)}</td><td>${column.filled}</td><td>${column.unique}</td></tr>`
+      )
+      .join('');
+    const activityHtml = activityLog
+      .slice(0, 8)
+      .map((entry) => `<li><strong>${escapeHtml(entry.action)}</strong><span>${escapeHtml(new Date(entry.at).toLocaleString())}</span></li>`)
+      .join('');
     const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -1969,6 +2351,10 @@ export default function App() {
       <table><tr><th>${escapeHtml(pivotSummary.labelHeader)}</th><th>Count</th><th>Sum ${escapeHtml(pivotSummary.valueHeader)}</th><th>Avg ${escapeHtml(pivotSummary.valueHeader)}</th></tr>${summaryRows || '<tr><td colspan="4">No summary rows available.</td></tr>'}</table>
     </section>
     <section class="panel">
+      <h2>Schema map</h2>
+      <table><tr><th>Column</th><th>Header</th><th>Type</th><th>Filled</th><th>Unique</th></tr>${schemaRows || '<tr><td colspan="5">No schema detected.</td></tr>'}</table>
+    </section>
+    <section class="panel">
       <h2>Notes</h2>
       <ul>${notesHtml || '<li><span>No saved cell notes.</span></li>'}</ul>
     </section>
@@ -1979,6 +2365,10 @@ export default function App() {
     <section class="panel">
       <h2>Scenarios</h2>
       <ul>${scenarioHtml || '<li><span>No saved scenarios.</span></li>'}</ul>
+    </section>
+    <section class="panel">
+      <h2>Activity log</h2>
+      <ul>${activityHtml || '<li><span>No local activity recorded.</span></li>'}</ul>
     </section>
   </main>
 </body>
@@ -2050,6 +2440,19 @@ export default function App() {
           ))}
         </div>
 
+        <div className="side-section">
+          <div className="side-heading">
+            <Grid3X3 size={15} />
+            Operator kits
+          </div>
+          {workbookTemplates.map((template) => (
+            <button className="template-item" key={template.name} onClick={() => loadWorkbookTemplate(template)}>
+              <ChevronRight size={14} />
+              {template.name}
+            </button>
+          ))}
+        </div>
+
         <div className="ops-strip">
           <span>{health?.database === 'mongo' ? 'MongoDB live' : 'Demo mode'}</span>
           <strong>{aiStatus}</strong>
@@ -2094,6 +2497,14 @@ export default function App() {
             <button className="command-button" onClick={downloadCsv}>
               <Download size={16} />
               Export CSV
+            </button>
+            <button className="command-button" onClick={downloadRawCsv}>
+              <Download size={16} />
+              Raw CSV
+            </button>
+            <button className="command-button" onClick={exportAuditCsv}>
+              <ClipboardList size={16} />
+              Audit CSV
             </button>
             <button className="command-button" onClick={exportWorkbookReport}>
               <ClipboardList size={16} />
@@ -2284,6 +2695,10 @@ export default function App() {
                 <button onClick={deleteSelectedColumn}>Delete column</button>
                 <button onClick={clearSelectedRow}>Clear row</button>
                 <button onClick={clearSelectedColumn}>Clear column</button>
+                <button onClick={normalizeHeaders}>Normalize headers</button>
+                <button onClick={addTotalRow}>Add totals</button>
+                <button onClick={fillNumberSeries}>Fill series</button>
+                <button onClick={splitSelectedColumn}>Split column</button>
                 <button onClick={fillSelectedColumnBlanks}>Fill blanks down</button>
                 <button onClick={removeDuplicateRowsByColumn}>Remove duplicates</button>
                 <button className="wide-tool" onClick={removeBlankRows}>
@@ -2395,6 +2810,11 @@ export default function App() {
                 <button onClick={() => insertFormulaTemplate('AVERAGEIF')}>AVERAGEIF</button>
                 <button onClick={() => insertFormulaTemplate('IF')}>IF</button>
                 <button onClick={() => insertFormulaTemplate('ROUND')}>ROUND</button>
+                <button onClick={() => insertFormulaTemplate('PRODUCT')}>PRODUCT</button>
+                <button onClick={() => insertFormulaTemplate('STDEV')}>STDEV</button>
+                <button onClick={() => insertFormulaTemplate('RANK')}>RANK</button>
+                <button onClick={() => insertFormulaTemplate('UNIQUECOUNT')}>UNIQUECOUNT</button>
+                <button onClick={() => insertFormulaTemplate('VLOOKUP')}>VLOOKUP</button>
               </div>
             </section>
 
@@ -2630,6 +3050,30 @@ export default function App() {
               </div>
             </section>
 
+            <section className="schema-section">
+              <div className="panel-heading">
+                <ClipboardList size={16} />
+                Schema map
+              </div>
+              <div className="schema-list">
+                {schemaProfile
+                  .filter((column) => column.filled)
+                  .slice(0, 8)
+                  .map((column) => (
+                    <button
+                      className={cx('schema-row', selected.col === column.col && 'active')}
+                      key={column.column}
+                      onClick={() => setSelected({ row: 0, col: column.col })}
+                    >
+                      <strong>{column.column}</strong>
+                      <span>{column.header}</span>
+                      <em>{column.type}</em>
+                    </button>
+                  ))}
+                {!schemaProfile.some((column) => column.filled) && <p>No typed columns yet.</p>}
+              </div>
+            </section>
+
             <section className="chart-section">
               <div className="panel-heading">
                 <BarChart3 size={16} />
@@ -2768,6 +3212,24 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </section>
+
+            <section className="activity-log-section">
+              <div className="panel-heading">
+                <Activity size={16} />
+                Activity log
+              </div>
+              <div className="activity-list">
+                {activityLog.slice(0, 6).map((entry) => (
+                  <div className="activity-row" key={entry.id}>
+                    <strong>{entry.action}</strong>
+                    <span>
+                      {new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} / {entry.filled} cells
+                    </span>
+                  </div>
+                ))}
+                {!activityLog.length && <p>No local operations yet.</p>}
               </div>
             </section>
 

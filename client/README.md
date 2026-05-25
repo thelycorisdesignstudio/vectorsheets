@@ -23,6 +23,7 @@ Sidebar
   New workbook
   Workbook list
   Templates
+  Operator kits
   Runtime status
 
 Main stage
@@ -49,8 +50,10 @@ Main stage
     Versions
     Cell intelligence
     Column profile
+    Schema map
     Chart
     Scenario console
+    Activity log
     Audit
 ```
 
@@ -63,6 +66,7 @@ The UI intentionally stays close to spreadsheet software:
 - Green spreadsheet accent.
 - Monospaced workbook and cell details.
 - Clear grid lines.
+- Inspector tools grouped by spreadsheet workflow instead of marketing copy.
 - Minimal decorative styling.
 - Responsive mobile stacking.
 
