@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+*.log
+*.err
+*.out
+*-desktop.png
+*-mobile.png
+vectorsheets-*.png

@@ -1,0 +1,40 @@
+{
+  "name": "vectorsheets",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Vectorsheets is a MERN spreadsheet agent for generating, editing, and analyzing business models from natural language.",
+  "scripts": {
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "client:dev": "vite --host 127.0.0.1",
+    "server:dev": "nodemon server/index.js",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.13.1",
+    "@vitejs/plugin-react": "latest",
+    "compression": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "helmet": "latest",
+    "lucide-react": "latest",
+    "mongoose": "latest",
+    "morgan": "latest",
+    "openai": "^6.38.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "concurrently": "latest",
+    "nodemon": "latest",
+    "playwright": "^1.60.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
