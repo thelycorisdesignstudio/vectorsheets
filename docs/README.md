@@ -14,6 +14,7 @@ Vectorsheets is a spreadsheet workbench with a server-side AI workbook engine. T
 
 The app intentionally keeps the interface close to spreadsheet patterns:
 
+- Hosted product landing page at `/landing`.
 - Left workspace navigation.
 - Top workbook actions.
 - Prompt command line.

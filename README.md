@@ -7,6 +7,7 @@ The product is designed to feel familiar to Excel users: a clean workbook list, 
 ## Current Status
 
 - Local production host: `http://127.0.0.1:8080`
+- Landing page: `http://127.0.0.1:8080/landing`
 - Client: React + Vite
 - API: Express
 - Database: MongoDB through Mongoose, with in-memory fallback
@@ -16,6 +17,7 @@ The product is designed to feel familiar to Excel users: a clean workbook list, 
 ## Product Capabilities
 
 - Natural-language workbook generation.
+- Hosted landing page for product positioning and workspace entry.
 - Editable spreadsheet grid with formula bar.
 - Formula engine with references, ranges, arithmetic, comparisons, `IF`, `AND`, `OR`, `ROUND`, `ABS`, `SUM`, `PRODUCT`, `AVERAGE`, `AVG`, `MIN`, `MAX`, `COUNT`, `MEDIAN`, `STDEV`, `VAR`, `RANK`, `PERCENTILE`, `UNIQUECOUNT`, `VLOOKUP`, `SUMIF`, `COUNTIF`, and `AVERAGEIF`.
 - One-click operator kits for SaaS metrics, sales pipeline, and support SLA workbooks.

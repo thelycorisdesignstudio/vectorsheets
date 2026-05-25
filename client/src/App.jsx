@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './lib/api';
+import productPreview from './assets/product-preview.png';
 import {
   COLS,
   ROWS,
@@ -609,6 +610,153 @@ function normalizeHeaderLabel(value, fallback) {
   return cleaned.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).slice(0, 42);
 }
 
+function LandingPage() {
+  const capabilities = [
+    {
+      title: 'Generate structured workbooks',
+      body: 'Turn a plain operating question into formulas, charts, validation, and an editable grid.',
+      icon: <Sparkles size={18} />
+    },
+    {
+      title: 'Audit every assumption',
+      body: 'Trace references, dependents, formula errors, schema quality, and workbook health from one surface.',
+      icon: <ShieldCheck size={18} />
+    },
+    {
+      title: 'Operate like a spreadsheet',
+      body: 'Import CSV, paste data, sort, split, clean, summarize, export, version, and scenario test.',
+      icon: <Grid3X3 size={18} />
+    }
+  ];
+  const workflow = [
+    ['01', 'Prompt or import', 'Start from natural language, a CSV, pasted data, or an operator kit.'],
+    ['02', 'Model in grid', 'Use familiar spreadsheet controls with formulas, named ranges, charts, and validation.'],
+    ['03', 'Ship the report', 'Export evaluated CSV, raw formulas, audits, JSON, HTML, and summary views.']
+  ];
+  const proof = [
+    ['30+', 'spreadsheet actions'],
+    ['20+', 'formula functions'],
+    ['4', 'export formats'],
+    ['Auto', 'AI fallback']
+  ];
+
+  return (
+    <main className="landing-shell">
+      <nav className="landing-nav">
+        <a className="landing-brand" href="/landing" aria-label="Vectorsheets landing">
+          <span>
+            <Grid3X3 size={18} />
+          </span>
+          Vectorsheets
+        </a>
+        <div className="landing-links">
+          <a href="#platform">Platform</a>
+          <a href="#workflow">Workflow</a>
+          <a href="#security">Reliability</a>
+          <a href="/">Open workspace</a>
+        </div>
+      </nav>
+
+      <section className="landing-hero">
+        <div className="hero-copy">
+          <span className="landing-kicker">Spreadsheet intelligence for operators</span>
+          <h1>Build, audit, and operate business models from one living grid.</h1>
+          <p>
+            Vectorsheets gives teams an AI workbook engine with the controls Excel users already understand:
+            formulas, validation, scenarios, exports, and traceable model logic.
+          </p>
+          <div className="hero-actions">
+            <a className="landing-primary" href="/">
+              Open workspace
+              <ChevronRight size={17} />
+            </a>
+            <a className="landing-secondary" href="#platform">
+              See platform
+            </a>
+          </div>
+        </div>
+        <div className="hero-proof" aria-label="Vectorsheets product metrics">
+          {proof.map(([value, label]) => (
+            <div key={label}>
+              <strong>{value}</strong>
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="product-showcase" aria-label="Vectorsheets workspace preview">
+        <div className="showcase-frame">
+          <img src={productPreview} alt="Vectorsheets spreadsheet workspace with grid, tools, and inspector" />
+        </div>
+        <div className="showcase-caption">
+          <span>Live product surface</span>
+          <p>Generated workbooks stay editable, inspectable, and exportable instead of disappearing into a black box.</p>
+        </div>
+      </section>
+
+      <section className="landing-section" id="platform">
+        <div className="section-heading">
+          <span className="landing-kicker">Platform</span>
+          <h2>AI generation with spreadsheet-grade control.</h2>
+        </div>
+        <div className="capability-grid">
+          {capabilities.map((item) => (
+            <article className="capability-card" key={item.title}>
+              <div>{item.icon}</div>
+              <h3>{item.title}</h3>
+              <p>{item.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="workflow-section" id="workflow">
+        <div className="section-heading">
+          <span className="landing-kicker">Workflow</span>
+          <h2>From request to governed workbook in minutes.</h2>
+        </div>
+        <div className="workflow-list">
+          {workflow.map(([number, title, body]) => (
+            <article key={number}>
+              <strong>{number}</strong>
+              <div>
+                <h3>{title}</h3>
+                <p>{body}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="reliability-section" id="security">
+        <div>
+          <span className="landing-kicker">Reliability</span>
+          <h2>Cloud AI when it works. Local generation when it does not.</h2>
+        </div>
+        <p>
+          Vectorsheets keeps the user flow alive when provider credentials fail. The workspace surfaces AI runtime,
+          latest errors, database mode, and workbook health so teams can operate without silent breakage.
+        </p>
+      </section>
+
+      <section className="landing-cta">
+        <h2>Open the workspace and start modeling.</h2>
+        <a className="landing-primary" href="/">
+          Launch Vectorsheets
+          <ChevronRight size={17} />
+        </a>
+      </section>
+    </main>
+  );
+}
+
+export default function App() {
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  if (path === '/landing' || path === '/landing.html') return <LandingPage />;
+  return <WorkspaceApp />;
+}
+
 function WorkbookChart({ workbook, grid }) {
   const points = chartSeries(grid, workbook.chart);
   const max = Math.max(...points.map((point) => point.value), 1);
@@ -762,7 +910,7 @@ function SpreadsheetGrid({
   );
 }
 
-export default function App() {
+function WorkspaceApp() {
   const [health, setHealth] = useState(null);
   const [workbooks, setWorkbooks] = useState([]);
   const [active, setActive] = useState(blankWorkbook());

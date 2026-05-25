@@ -5,6 +5,14 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 
 try {
+  const landingUrl = new URL('/landing', appUrl).toString();
+  await page.goto(landingUrl, { waitUntil: 'networkidle' });
+  await page.getByRole('heading', { name: 'Build, audit, and operate business models from one living grid.' }).waitFor({
+    state: 'visible',
+    timeout: 15000
+  });
+  await page.getByRole('link', { name: 'Open workspace' }).first().waitFor({ state: 'visible', timeout: 15000 });
+
   await page.goto(appUrl, { waitUntil: 'networkidle' });
   await page.locator('.sheet-grid').waitFor({ state: 'visible', timeout: 15000 });
   await page.locator('.generate-button svg').waitFor({ state: 'detached', timeout: 5000 });
