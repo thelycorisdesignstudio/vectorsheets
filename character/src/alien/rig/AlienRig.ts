@@ -584,12 +584,12 @@ export class AlienRig {
   private updateLobes(pose: Pose, dt: number, spinZ: number, perk: number) {
     const t = pose.time;
     const mood = clamp(perk, -1, 1.2);
-    const ripple = (0.035 + pose.flourish * 0.09) * this.jiggleScale;
+    const ripple = (0.022 + pose.flourish * 0.08) * this.jiggleScale;
     for (const l of this.lobes) {
       const side = Math.sign(l.lean) || 0;
       const up = mood > 0 ? mood * 0.12 : mood * 0.42; // + toward upright, − droop outward
-      const wave = Math.sin(t * (1.7 + pose.flourish * 4) - l.index * 0.95) * ripple;
-      const sway = Math.sin(t * 1.25 - l.index * 0.7) * ripple * 0.7;
+      const wave = Math.sin(t * (1.15 + pose.flourish * 4) - l.index * 0.95) * ripple;
+      const sway = Math.sin(t * 0.85 - l.index * 0.7) * ripple * 0.7;
       const jz = l.jz.update(clamp(-spinZ * 0.035 - this.headVel.x * 0.15, -0.35, 0.35) * this.jiggleScale, dt);
       const jx = l.jx.update(clamp(this.headVel.y * 0.25 - this.headVel.z * 0.12, -0.35, 0.35) * this.jiggleScale, dt);
       if (pose.kick > 0) l.jx.kick((-2.5 - l.index * 0.4) * pose.kick);

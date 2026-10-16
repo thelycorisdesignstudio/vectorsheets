@@ -160,6 +160,11 @@ export class AnimationController {
   private lastGazeKind: FixationKind = 'user';
   private lastExpression: ExpressionName = 'neutral';
   private flourish = 0;
+  // Pose-to-pose idle: a relaxed pose is chosen, eased into slowly and held.
+  private idlePoseTarget = { headRz: 0, headRx: 0, headRy: 0, rootRz: 0, rootRx: 0, rootX: 0, armLz: 0, armRz: 0 };
+  private idlePose = new SpringRecord({ ...this.idlePoseTarget }, 1.7);
+  private idlePoseTimer = 1.5;
+  private poseSide = 1;
   private poseSprings = new SpringRecord(emptyChannels(), 4.5);
   private gazeYaw = new Spring(0, 26);
   private gazePitch = new Spring(0, 26);
@@ -249,6 +254,30 @@ export class AnimationController {
     else if (['idle', 'waiting'].includes(this.state)) this.enter('reacting', `react: ${kind}`);
   }
 
+  /**
+   * Choose the next relaxed pose. Head tilts tend to alternate sides, the
+   * body counter-balances the head, and listening tilts are larger and
+   * slower (an attentive, "I'm with you" lean). Speaking poses are smaller
+   * and change on phrase boundaries.
+   */
+  private nextIdlePose(hold: [number, number]) {
+    const r = (a: number, b: number) => a + (b - a) * this.rnd();
+    if (this.rnd() < 0.75) this.poseSide *= -1;
+    const s = this.poseSide;
+    const scale = this.state === 'listening' ? 1.25 : this.state === 'speaking' ? 0.6 : this.state === 'thinking' ? 0.5 : 1;
+    const centred = this.rnd() < 0.22; // sometimes simply settle upright
+    const T = this.idlePoseTarget;
+    T.headRz = centred ? 0 : s * r(0.07, 0.17) * scale;
+    T.headRx = r(-0.03, 0.06) * scale;
+    T.headRy = r(-0.08, 0.08) * scale;
+    T.rootRz = centred ? 0 : -s * r(0.01, 0.035) * scale;
+    T.rootRx = r(0, 0.03) * scale;
+    T.rootX = -s * r(0, 0.02) * scale;
+    T.armLz = r(-0.04, 0.08) * scale;
+    T.armRz = -r(-0.04, 0.08) * scale;
+    this.idlePoseTimer = r(hold[0], hold[1]) * (this.state === 'speaking' ? 0.5 : 1);
+  }
+
   private startMicro(name?: string) {
     let pick = MICROS.find((m) => m.name === name);
     if (!pick) {
@@ -260,7 +289,7 @@ export class AnimationController {
     const face = { ...pick.face };
     if (face.browAsym) face.browAsym *= flip;
     this.micro = { name: pick.name, face, duration: pick.duration * (0.85 + this.rnd() * 0.3), time: 0, flourish: pick.flourish };
-    this.microTimer = 3.5 + this.rnd() * 5;
+    this.microTimer = 6 + this.rnd() * 7;
   }
 
   playClip(name: ClipName) {
@@ -372,6 +401,7 @@ export class AnimationController {
     this.faceTarget.browRaise += clipOut.browRaise;
     this.faceTarget.glow += clipOut.glow;
 
+    this.face.setDamping(style.faceDamping);
     const faceFreq = style.faceFreq * (1 + this.enterBoost * 0.6) * (this.overlay ? 1.4 : 1);
     // Eye contact dilates the pupils a touch.
     this.faceTarget.pupil += this.contact.value * 0.05;
@@ -388,7 +418,8 @@ export class AnimationController {
     if (sf.weight > 0.001) {
       const w = this.def.speech || this.speech.active ? sf.weight : sf.weight * 0.5;
       const mo = sf.mouth;
-      face.mouthOpen = face.mouthOpen * (1 - w) + mo.open * w;
+      // Companion-scale speech: shapes are read, not flapped.
+      face.mouthOpen = face.mouthOpen * (1 - w) + mo.open * 0.78 * w;
       face.mouthRound = face.mouthRound * (1 - w) + mo.round * w;
       face.mouthWidth = face.mouthWidth * (1 - w) + mo.width * w;
       // Keep part of the expression's smile so speech stays in character.
@@ -446,17 +477,22 @@ export class AnimationController {
       body[ch] += v * (1 - own[ch]);
     };
     body.squash += breath * 0.011 * m.breathAmp * (reduced ? 0.6 : 1);
-    idle('rootRz', fbm1(t * 0.13) * 0.028 * amp);
-    idle('rootX', fbm1(t * 0.1 + 5) * 0.014 * amp);
-    idle('rootRy', fbm1(t * 0.07 + 9) * 0.07 * amp);
-    idle('headRz', fbm1(t * 0.17 + 3) * 0.045 * amp);
-    idle('headRx', fbm1(t * 0.15 + 7) * 0.025 * amp);
-    idle('headRy', fbm1(t * 0.11 + 1) * 0.05 * amp);
-    idle('armLz', breath * 0.025 * m.breathAmp + fbm1(t * 0.2 + 11) * 0.04 * amp);
-    idle('armRz', -(breath * 0.025 * m.breathAmp + fbm1(t * 0.2 + 13) * 0.04 * amp));
+    // Weighted, held poses carry most of the life; only a whisper of noise stays on top.
+    this.idlePoseTimer -= dt;
+    if (this.idlePoseTimer <= 0 || (sf.phraseStart && this.state === 'speaking')) this.nextIdlePose(style.poseHold);
+    const ip = this.idlePose.update(this.idlePoseTarget, dt, 1.5 * (0.8 + 0.4 * energy));
+    const poseAmp = intensity * style.idleAmp * (this.state === 'sleep' ? 0.3 : 1);
+    for (const k in ip) idle(k as (typeof CHANNELS)[number], ip[k as keyof typeof ip] * poseAmp);
+    idle('rootRz', fbm1(t * 0.11) * 0.008 * amp);
+    idle('rootRy', fbm1(t * 0.06 + 9) * 0.03 * amp);
+    idle('headRz', fbm1(t * 0.13 + 3) * 0.012 * amp);
+    idle('headRx', fbm1(t * 0.12 + 7) * 0.008 * amp);
+    idle('headRy', fbm1(t * 0.09 + 1) * 0.015 * amp);
+    idle('armLz', breath * 0.02 * m.breathAmp);
+    idle('armRz', -breath * 0.02 * m.breathAmp);
     // Speech beats: emphasis nods and a livelier head while talking.
     if (stress > 0) body.headRx += stress * 0.035 * set.gesture * (reduced ? 0.4 : 1);
-    if (sf.weight > 0.01) body.headRy += fbm1(t * 0.6 + 21) * 0.03 * sf.weight * set.gesture * energy;
+    if (sf.weight > 0.01) body.headRy += fbm1(t * 0.35 + 21) * 0.018 * sf.weight * set.gesture * energy;
     body.headRz += face.headTilt;
     body.headRx += face.headPitch + hp;
     body.headRy += hy;

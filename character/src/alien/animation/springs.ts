@@ -52,6 +52,10 @@ export class SpringRecord<K extends string> {
       this.value[key] = initial[key];
     }
   }
+  setDamping(zeta: number) {
+    for (const key in this.springs) this.springs[key].zeta = zeta;
+  }
+
   update(target: Record<K, number>, dt: number, frequency?: number) {
     for (const key in this.springs) {
       this.value[key] = this.springs[key].update(target[key], dt, frequency);

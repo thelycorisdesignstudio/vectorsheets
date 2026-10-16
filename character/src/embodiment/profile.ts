@@ -71,10 +71,10 @@ export const ORU_PROFILE: CharacterProfile = {
   behaviour: {
     defaultExpression: 'neutral',
     defaultBehaviour: 'attentive',
-    animationStyle: 'playful',
+    animationStyle: 'gentle',
     movementIntensity: 1,
     blinkRate: 1,
-    gaze: { eyeContact: 0.72, pointerInterest: 0.6, glanceRate: 8 },
+    gaze: { eyeContact: 0.78, pointerInterest: 0.5, glanceRate: 5 },
     speakingGestureIntensity: 1,
     greeting: { onLoad: true, style: 'wave' },
     approvedExpressions: ['neutral', 'happy', 'content', 'curious', 'surprised', 'sleepy', 'thinking', 'listening', 'concerned', 'sad', 'shy', 'adoring', 'determined', 'confused', 'playful'],

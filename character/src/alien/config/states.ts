@@ -167,10 +167,15 @@ export interface StyleProfile {
   clipScale: number;
   idleAmp: number;
   jiggle: number;
+  /** face spring damping ratio (1 = no overshoot) */
+  faceDamping: number;
+  /** seconds between idle poses */
+  poseHold: [number, number];
 }
 
 export const ANIMATION_STYLES: Record<AnimationStyle, StyleProfile> = {
-  gentle: { label: 'Gentle', faceFreq: 5, bodyFreq: 3.2, gazeFreq: 20, clipScale: 0.75, idleAmp: 0.8, jiggle: 0.7 },
-  playful: { label: 'Playful', faceFreq: 8, bodyFreq: 4.6, gazeFreq: 26, clipScale: 1, idleAmp: 1, jiggle: 1 },
-  snappy: { label: 'Snappy', faceFreq: 13, bodyFreq: 7.5, gazeFreq: 36, clipScale: 1.12, idleAmp: 1.05, jiggle: 1.25 },
+  // Gentle is the calm, companion default: weighted pose-to-pose motion with long holds.
+  gentle: { label: 'Gentle', faceFreq: 6, bodyFreq: 3, gazeFreq: 22, clipScale: 0.85, idleAmp: 0.85, jiggle: 0.8, faceDamping: 0.88, poseHold: [3.8, 7] },
+  playful: { label: 'Playful', faceFreq: 8, bodyFreq: 4.6, gazeFreq: 26, clipScale: 1, idleAmp: 1, jiggle: 1, faceDamping: 0.74, poseHold: [2.8, 5.5] },
+  snappy: { label: 'Snappy', faceFreq: 13, bodyFreq: 7.5, gazeFreq: 36, clipScale: 1.12, idleAmp: 1.05, jiggle: 1.25, faceDamping: 0.66, poseHold: [2, 4] },
 };

@@ -42,7 +42,7 @@ const AMP_VOWELS: Viseme[] = ['aa', 'E', 'oh', 'ih', 'aa', 'ou'];
 export class SpeechAnimationController {
   private session: (SpeechSessionInput & { start: number; offset: number }) | null = null;
   private springs = {
-    open: new Spring(0, 24), width: new Spring(1, 20), round: new Spring(0, 20),
+    open: new Spring(0, 19), width: new Spring(1, 17), round: new Spring(0, 17),
     teeth: new Spring(0, 22), tongue: new Spring(0, 20), jaw: new Spring(0, 18),
   };
   private weight = new Spring(0, 12);

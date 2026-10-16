@@ -39,6 +39,12 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [view, setView] = useState<CameraView>(params.view);
   const [ready, setReady] = useState(false);
+  // The camera leans in while a conversation is under way.
+  const [engaged, setEngaged] = useState(false);
+  useEffect(
+    () => platform.anim.onStateChange((s) => setEngaged(['listening', 'thinking', 'preparing', 'speaking', 'waiting'].includes(s))),
+    [platform],
+  );
   const [failed, setFailed] = useState<string | null>(null);
   const [appearance, setAppearanceState] = useState<Appearance>(() => {
     const q = params.q;
@@ -134,7 +140,7 @@ export default function App() {
   return (
     <main className={`app ${presentation ? 'presenting' : ''} ${studio ? 'with-studio' : ''}`}>
       <div className="viewport">
-        <Stage view={view} orbit={!presentation || studio}>
+        <Stage view={view} orbit={!presentation || studio} focus={engaged && !anim.reducedMotion ? 1 : 0}>
           <AlienCharacter
             controller={platform.anim}
             expression={anim.expression === 'auto' ? undefined : anim.expression}

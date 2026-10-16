@@ -14,7 +14,7 @@ export const LIGHT_RIG = {
   uFillTint: { value: new THREE.Color('#9fb6ff') },
   uRimTint: { value: new THREE.Color('#fff1dc') },
   /** satin highlight strength (0 = fully matte) */
-  uSpec: { value: 0.55 },
+  uSpec: { value: 0.3 },
   /** global AO strength */
   uAOStrength: { value: 1 },
 };

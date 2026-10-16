@@ -75,6 +75,26 @@ describe('AnimationController state machine', () => {
     expect(a.pose.face.lidUpper).toBeGreaterThan(0.85);
   });
 
+  it('idle is calm but alive: big held poses, no jitter', () => {
+    const a = new AnimationController();
+    a.configure({ style: 'gentle' });
+    const head: number[] = [];
+    for (let i = 0; i < 60 * 40; i++) {
+      a.update(1 / 60, input);
+      head.push(a.pose.body.headRz);
+    }
+    const range = Math.max(...head) - Math.min(...head);
+    let maxStep = 0;
+    let jerk = 0;
+    for (let i = 2; i < head.length; i++) {
+      maxStep = Math.max(maxStep, Math.abs(head[i] - head[i - 1]));
+      jerk += Math.abs(head[i] - 2 * head[i - 1] + head[i - 2]);
+    }
+    expect(range).toBeGreaterThan(0.12); // visible, deliberate tilts
+    expect(maxStep).toBeLessThan(0.006); // < 0.35°/frame at 60 fps
+    expect(jerk / head.length).toBeLessThan(0.00012); // smooth arcs, not noise
+  });
+
   it('respects the approved expression set', () => {
     const a = new AnimationController();
     a.expressions.approved = new Set(['neutral']);
