@@ -343,6 +343,33 @@ async function generateWithResponses(prompt, config) {
   return workbookFromAiPayload(JSON.parse(outputText), prompt);
 }
 
+/**
+ * Generic structured call through whichever Responses provider is configured.
+ * Returns the parsed JSON object, or null when no provider is configured.
+ */
+export async function generateStructured({ instructions, input, schemaName, schema, maxOutputTokens = 600, temperature = 0.7 }) {
+  const config = aiConfig();
+  if (!config.configured || !['openai', 'azure-openai'].includes(config.provider)) return null;
+
+  const request = {
+    model: config.model,
+    temperature,
+    max_output_tokens: maxOutputTokens,
+    instructions,
+    input,
+    text: { format: { type: 'json_schema', name: schemaName, strict: true, schema } }
+  };
+  const url = config.provider === 'openai' ? openAiResponsesUrl() : responsesUrl();
+  const headers =
+    config.provider === 'openai'
+      ? { Authorization: `Bearer ${env('OPENAI_API_KEY')}` }
+      : await azureAuthHeaders(config);
+  const body = await postJson(url, headers, request);
+  const outputText = parseOutputText(body);
+  if (!outputText) throw new Error(`${config.provider} returned no output.`);
+  return { payload: JSON.parse(outputText), provider: config.provider, model: config.model };
+}
+
 export async function generateWorkbook(prompt) {
   try {
     const workbook = (await generateWithAzure(prompt)) || (await generateWithOpenAI(prompt));

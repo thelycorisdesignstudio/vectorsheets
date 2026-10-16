@@ -18,6 +18,9 @@ export const PART = { body: 0, head: 1, armL: 2, armR: 3, earL: 4, earR: 5, crow
 export const PART_COUNT = 7;
 /** Bone slots: parts plus forearms (split from the arm part by the elbow). */
 export const BONE = { hips: 0, head: 1, armL: 2, armR: 3, earL: 4, earR: 5, crown: 6, foreL: 7, foreR: 8 } as const;
+/** Each crown lobe gets its own bone after the fixed ones. */
+export const LOBE_BONE_BASE = 9;
+export const MAX_LOBES = 8;
 
 export interface AnatomySpec {
   head: HeadShape;

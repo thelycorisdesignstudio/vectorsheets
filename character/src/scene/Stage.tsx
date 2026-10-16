@@ -1,6 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, PerformanceMonitor } from '@react-three/drei';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
@@ -19,8 +19,6 @@ interface StageProps {
   children: ReactNode;
   view: CameraView;
   orbit: boolean;
-  background: string;
-  dpr?: [number, number];
 }
 
 /** Distance multiplier so the whole character fits narrow (portrait) screens. */
@@ -62,21 +60,25 @@ function CameraRig({ view, controls }: { view: CameraView; controls: React.RefOb
 }
 
 /**
- * Warm, minimal studio: cream backdrop and a gentle three-quarter camera.
+ * Warm, minimal studio and a gentle three-quarter camera. Adaptive pixel ratio
+ * keeps frame rate stable on weaker devices.
  * Lighting and the ground shadow belong to the character itself (stylised
  * shaders + blob shadow), so the stage stays clean and fast.
  */
-export function Stage({ children, view, orbit, background, dpr = [1, 2] }: StageProps) {
+export function Stage({ children, view, orbit }: StageProps) {
   const controls = useRef<OrbitControlsImpl | null>(null);
+  // Start at the device ratio (capped at 2) and step down if frames drop.
+  const maxDpr = Math.min(2, window.devicePixelRatio || 1);
+  const [dpr, setDpr] = useState(maxDpr);
   return (
     <Canvas
       dpr={dpr}
       camera={{ position: VIEWS[view].position, fov: 30, near: 0.1, far: 60 }}
-      gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
-      onCreated={({ gl }) => gl.setClearColor(background)}
+      // Transparent canvas: the warm studio backdrop is a CSS gradient behind it.
+      gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
       style={{ touchAction: 'none' }}
     >
-      <color attach="background" args={[background]} />
+      <PerformanceMonitor onDecline={() => setDpr((d) => Math.max(1, d - 0.5))} onIncline={() => setDpr((d) => Math.min(maxDpr, d + 0.25))} />
       {children}
       <OrbitControls
         ref={controls}

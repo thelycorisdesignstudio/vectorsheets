@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { LIGHT_RIG, LIGHT_RIG_GLSL } from './lightRig';
 
 /**
  * Soft-vinyl toon shading — the core of the look.
@@ -22,6 +23,8 @@ export interface ToonOptions {
   shadow?: THREE.ColorRepresentation;
   /** uses aMask / aAO attributes */
   masks?: boolean;
+  /** brow: bends in the vertex shader (inner / outer / arch) */
+  brow?: boolean;
   /** strength of the shading (0 = flat) */
   shade?: number;
   side?: THREE.Side;
@@ -37,16 +40,28 @@ export type ToonMaterial = THREE.ShaderMaterial & {
     uShadowMul: { value: THREE.Color };
     uGradient: { value: THREE.Vector2 };
     uShade: { value: number };
-    uLight: { value: THREE.Vector3 };
     uOpacity: { value: number };
+    uJaw: { value: number };
+    uCheek: { value: number };
+    uBrowInner: { value: number };
+    uBrowOuter: { value: number };
+    uBrowArch: { value: number };
+    uBrowSide: { value: number };
+    uBrowHalf: { value: number };
   };
 };
 
-export const TOON_LIGHT = new THREE.Vector3(-0.42, 0.62, 0.66).normalize();
 
 const vertex = /* glsl */ `
 #include <common>
 #include <skinning_pars_vertex>
+uniform float uJaw;
+uniform float uCheek;
+uniform float uBrowInner;
+uniform float uBrowOuter;
+uniform float uBrowArch;
+uniform float uBrowSide;
+uniform float uBrowHalf;
 #ifdef USE_MASKS
 attribute vec4 aMask;
 attribute float aAO;
@@ -62,6 +77,18 @@ void main() {
   #include <skinnormal_vertex>
   #include <defaultnormal_vertex>
   #include <begin_vertex>
+  #ifdef BROW
+  // Brows bend instead of rotating rigidly: each end moves on its own, plus an arch.
+  float bs = clamp(position.x / uBrowHalf, -1.0, 1.0) * uBrowSide;
+  float bt = smoothstep(-1.0, 1.0, bs);
+  transformed.y += mix(uBrowInner, uBrowOuter, bt) + uBrowArch * (1.0 - bs * bs);
+  #endif
+  #ifdef USE_MASKS
+  // Facial deformation: cheeks lift along the normal, the jaw drops the chin.
+  float cheekMask = smoothstep(-0.9, 0.45, aMask.z);
+  transformed += objectNormal * uCheek * cheekMask * 0.02;
+  transformed.y -= uJaw * aMask.x * 0.032;
+  #endif
   #include <skinning_vertex>
   #include <project_vertex>
   vNormalV = normalize(transformedNormal);
@@ -83,7 +110,6 @@ uniform float uBlushAmount;
 uniform vec3 uShadowMul;
 uniform vec2 uGradient;
 uniform float uShade;
-uniform vec3 uLight;
 uniform float uOpacity;
 varying vec3 vNormalV;
 varying vec3 vRest;
@@ -92,6 +118,7 @@ varying vec3 vViewDir;
 varying vec4 vMask;
 varying float vAO;
 #endif
+${LIGHT_RIG_GLSL}
 void main() {
   vec3 N = normalize(vNormalV);
   if (!gl_FrontFacing) N = -N;
@@ -107,17 +134,9 @@ void main() {
   albedo = mix(albedo, uTip, smoothstep(0.0, 1.0, vMask.y));
   float blushEdge = fwidth(vMask.z) * 1.2 + 0.004;
   albedo = mix(albedo, uBlush, smoothstep(-blushEdge, blushEdge, vMask.z) * uBlushAmount);
-  ao = mix(0.55, 1.0, vAO);
+  ao = mix(0.5, 1.0, vAO);
   #endif
-  float ndl = dot(N, uLight);
-  float wrap = smoothstep(-0.55, 0.95, ndl);
-  float sky = 0.5 + 0.5 * N.y;
-  float light = mix(0.2, 1.0, wrap) * mix(0.86, 1.0, sky);
-  light = mix(1.0, light, uShade) * mix(1.0, ao, uShade);
-  vec3 col = albedo * mix(uShadowMul, vec3(1.0), light);
-  // Edges turning away from the camera deepen slightly, like painted vinyl.
-  float rim = pow(1.0 - clamp(dot(N, vViewDir), 0.0, 1.0), 2.5);
-  col *= mix(vec3(1.0), uShadowMul, rim * 0.45 * uShade);
+  vec3 col = rigLight(albedo, N, normalize(vViewDir), uShadowMul, ao, uShade);
   gl_FragColor = vec4(col, uOpacity);
   #include <colorspace_fragment>
 }
@@ -142,14 +161,22 @@ export function createToonMaterial(o: ToonOptions = {}): ToonMaterial {
       uShadowMul: { value: shadowMultiplier(o.shadow ?? color.clone().multiplyScalar(0.7), color) },
       uGradient: { value: new THREE.Vector2(...(o.gradient ?? [0, 1])) },
       uShade: { value: o.shade ?? 1 },
-      uLight: { value: TOON_LIGHT },
       uOpacity: { value: 1 },
+      uJaw: { value: 0 },
+      uCheek: { value: 0 },
+      uBrowInner: { value: 0 },
+      uBrowOuter: { value: 0 },
+      uBrowArch: { value: 0 },
+      uBrowSide: { value: 1 },
+      uBrowHalf: { value: 0.11 },
+      ...LIGHT_RIG,
     },
     vertexShader: vertex,
     fragmentShader: fragment,
     side: o.side ?? THREE.FrontSide,
     defines: {
       ...(o.masks ? { USE_MASKS: '' } : {}),
+      ...(o.brow ? { BROW: '' } : {}),
       ...(o.gradientAxis === 'x' ? { GRADIENT_X: '' } : {}),
     },
   }) as ToonMaterial;

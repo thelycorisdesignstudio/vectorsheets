@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { AlienBrain } from './animation/brain';
+import { AnimationController } from './animation/AnimationController';
 import { GLBRig } from './rig/GLBRig';
 import type { AnimationState, AnimationStyle, ExpressionName } from './types';
 
@@ -39,15 +39,19 @@ export function GLBAlienCharacter({
 }: GLBAlienCharacterProps) {
   const gltf = useGLTF(url);
   const rig = useMemo(() => new GLBRig(gltf.scene), [gltf.scene]);
-  const brain = useMemo(() => new AlienBrain(), []);
+  const brain = useMemo(() => new AnimationController(), []);
   const { camera, pointer } = useThree();
   const moved = useRef(-1e9);
   const last = useRef(new THREE.Vector2());
 
+  useEffect(() => brain.onStateChange((s) => onAnimationChange?.(s)), [brain, onAnimationChange]);
+  useEffect(() => void brain.request(animation), [brain, animation]);
+  useEffect(() => brain.configure({ style: animationStyle, blinking: enableBlinking, tracking: trackPointer, expressionOverride: expression ?? null }), [brain, animationStyle, enableBlinking, trackPointer, expression]);
   useEffect(() => {
-    brain.onStateChange = (s) => onAnimationChange?.(s);
-  }, [brain, onAnimationChange]);
-  useEffect(() => brain.setState(animation), [brain, animation]);
+    if (speechLevel == null) return;
+    brain.speech.begin({ amplitude: () => speechLevel });
+    return () => brain.speech.end();
+  }, [brain, speechLevel]);
 
   useFrame((_, dt) => {
     if (paused) return;
@@ -59,15 +63,11 @@ export function GLBAlienCharacter({
     const active = trackPointer && performance.now() - moved.current < 2600;
     const fov = THREE.MathUtils.degToRad((camera as THREE.PerspectiveCamera).fov ?? 30);
     const pose = brain.update(dt, {
-      pointer: { yaw: pointer.x * fov * 0.9, pitch: -pointer.y * fov * 0.6, active },
-      blinking: enableBlinking,
-      tracking: trackPointer,
-      expression: expression ?? null,
-      style: animationStyle,
-      speechLevel,
+      camera: { yaw: 0, pitch: 0, valid: true },
+      pointer: { yaw: pointer.x * fov * 0.9, pitch: -pointer.y * fov * 0.6, active, speed: 0 },
     });
     rig.update(pose);
   });
 
-  return <primitive object={rig.root} onPointerDown={() => interactive && brain.poke('belly')} />;
+  return <primitive object={rig.root} onPointerDown={() => interactive && brain.react('giggle')} />;
 }

@@ -1,4 +1,4 @@
-import { Anatomy, type AnatomySpec, BONE, PART, PART_COUNT } from './anatomy';
+import { Anatomy, type AnatomySpec, BONE, LOBE_BONE_BASE, MAX_LOBES, PART, PART_COUNT } from './anatomy';
 import { sstep } from './sdf';
 import { extractSurface } from './surfaceNets';
 
@@ -9,7 +9,7 @@ export interface BodyMeshData {
   indices: Uint32Array;
   skinIndex: Uint16Array;
   skinWeight: Float32Array;
-  /** x: unused, y: tip gradient, z: blush signed field, w: vertical gradient */
+  /** x: jaw region, y: tip gradient, z: blush signed field, w: vertical gradient */
   masks: Float32Array;
   ao: Float32Array;
 }
@@ -35,8 +35,11 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
 
   const parts = new Float32Array(PART_COUNT);
   const w = new Float32Array(PART_COUNT);
-  const bw = new Float32Array(9);
-  const order = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+  const boneCount = LOBE_BONE_BASE + MAX_LOBES;
+  const bw = new Float32Array(boneCount);
+  const order = Array.from({ length: boneCount }, (_, i) => i);
+  const lobes = anatomy.lobes.slice(0, MAX_LOBES);
+  const lobeW = new Float32Array(lobes.length);
   const softness = [0.04, 0.04, 0.025, 0.025, 0.03, 0.03, 0.035];
   const h = anatomy.head;
   const blushC = [1, -1].map((s) => [h.c[0] + 0.4 * s, h.c[1] - 0.1]);
@@ -60,7 +63,35 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
     bw[BONE.head] = w[PART.head];
     bw[BONE.earL] = w[PART.earL];
     bw[BONE.earR] = w[PART.earR];
-    bw[BONE.crown] = w[PART.crown];
+    // Crown: split between the crown root (near the head) and each lobe's own bone.
+    if (lobes.length && w[PART.crown] > 1e-4) {
+      let lmin = Infinity;
+      const ld = lobeW;
+      for (let i = 0; i < lobes.length; i++) {
+        const l = lobes[i];
+        const dx = l.b[0] - l.a[0], dy = l.b[1] - l.a[1], dz = l.b[2] - l.a[2];
+        const len2 = dx * dx + dy * dy + dz * dz;
+        const t = Math.min(1, Math.max(0, ((x - l.a[0]) * dx + (y - l.a[1]) * dy + (z - l.a[2]) * dz) / len2));
+        const d = Math.hypot(x - (l.a[0] + dx * t), y - (l.a[1] + dy * t), z - (l.a[2] + dz * t)) - (l.r1 + (l.r2 - l.r1) * t);
+        ld[i] = d;
+        lmin = Math.min(lmin, d);
+      }
+      let lt = 0;
+      for (let i = 0; i < lobes.length; i++) {
+        ld[i] = Math.exp(-(ld[i] - lmin) / 0.03);
+        lt += ld[i];
+      }
+      // Near the head the crown root holds the lobe; further out the lobe bone takes over.
+      for (let i = 0; i < lobes.length; i++) {
+        const l = lobes[i];
+        const dx = l.b[0] - l.a[0], dy = l.b[1] - l.a[1], dz = l.b[2] - l.a[2];
+        const t = ((x - l.a[0]) * dx + (y - l.a[1]) * dy + (z - l.a[2]) * dz) / (dx * dx + dy * dy + dz * dz);
+        const own = sstep(-0.25, 0.35, t);
+        const share = (ld[i] / lt) * w[PART.crown];
+        bw[LOBE_BONE_BASE + i] = share * own;
+        bw[BONE.crown] += share * (1 - own);
+      }
+    } else bw[BONE.crown] = w[PART.crown];
     // Split each arm between upper arm and forearm around the elbow.
     for (const [part, upper, fore, i] of [[PART.armL, BONE.armL, BONE.foreL, 0], [PART.armR, BONE.armR, BONE.foreR, 1]] as const) {
       const s = anatomy.shoulders[i], e = anatomy.elbows[i];
@@ -102,6 +133,9 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
       }
     }
     masks[v * 4 + 2] = blush;
+    // Jaw region: the face below the mouth drops when the jaw opens.
+    const mouthY = h.c[1] - 0.135;
+    masks[v * 4] = sstep(mouthY + 0.02, mouthY - 0.14, y) * sstep(0.2, 0.6, nz) * (1 - sstep(0.22, 0.48, Math.abs(x))) * w[PART.head];
     masks[v * 4 + 3] = w[PART.head] + w[PART.crown] + w[PART.earL] + w[PART.earR] > 0.5 ? 1 : sstep(0.0, 1.0, y);
 
     // --- Ambient occlusion -------------------------------------------------

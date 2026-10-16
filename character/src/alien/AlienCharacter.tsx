@@ -1,21 +1,26 @@
-import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
-import { AlienBrain } from './animation/brain';
+import { AnimationController, type ControllerSettings } from './animation/AnimationController';
 import { requestBodyMesh } from './geometry/meshCache';
 import type { BodyMeshData } from './geometry/bodyMesh';
 import { AlienRig } from './rig/AlienRig';
 import { resolvePalette } from './config/palettes';
 import { ANIMATION_STYLES } from './config/states';
 import type {
-  Accessory, AlienController, AnimationState, AnimationStyle, BrowShape, CrownFeature, EarStyle,
-  ExpressionName, EyeShape, HeadShape, Palette, PaletteName, RenderQuality, TouchZone,
+  Accessory, AnimationState, Behaviour, BrowShape, CrownFeature, EarStyle, ExpressionName, EyeShape,
+  HeadShape, Palette, PaletteName, RenderQuality, TouchZone,
 } from './types';
 
 export interface AlienCharacterProps {
-  /** Requested animation state. One-shot states return to the last persistent state. */
+  /**
+   * Drive the character from outside (EmbodimentController). When omitted the
+   * component owns a controller and `animation` / `behaviour` props steer it.
+   */
+  controller?: AnimationController;
   animation?: AnimationState;
-  /** Facial expression override; `undefined` lets the animation state decide. */
+  behaviour?: Behaviour;
+  /** Facial expression override (art direction / dev tools). */
   expression?: ExpressionName;
   palette?: PaletteName | Palette;
   eyeShape?: EyeShape;
@@ -24,40 +29,34 @@ export interface AlienCharacterProps {
   ears?: EarStyle;
   crown?: CrownFeature;
   accessories?: Accessory[];
-  animationStyle?: AnimationStyle;
   quality?: RenderQuality;
-  enableBlinking?: boolean;
-  /** Reacts to clicks / taps. */
+  /** Animation settings forwarded to the controller (style, intensity, blinking…). */
+  settings?: Partial<ControllerSettings>;
   interactive?: boolean;
-  /** Eyes and head follow the pointer. */
-  trackPointer?: boolean;
   paused?: boolean;
-  /** Plays the greeting once the model is ready. */
-  greetOnMount?: boolean;
-  /** Falls asleep after this many idle seconds without interaction (0 = never). */
-  restAfter?: number;
-  /** External speech amplitude 0..1 (e.g. from an audio analyser). `null` = procedural. */
-  speechLevel?: number | null;
-  /** Colour of the soft ground shadow. */
   shadowColor?: string;
-  onAnimationChange?: (state: AnimationState) => void;
-  onPoke?: (zone: TouchZone) => void;
+  /** Touch handler; defaults to a simple reaction on the internal controller. */
+  onTouch?: (zone: TouchZone, side: 1 | -1) => void;
   onReady?: () => void;
-  controllerRef?: Ref<AlienController>;
+  onError?: (error: unknown) => void;
   position?: [number, number, number];
   rotation?: [number, number, number];
   scale?: number;
 }
 
 /**
- * An embodied, procedurally sculpted alien companion.
+ * The embodied character: a procedurally sculpted, skinned 3D model driven
+ * by an AnimationController. Frame-level work happens in `useFrame`; React
+ * only re-renders on meaningful prop changes.
  *
  * ```tsx
- * <AlienCharacter expression="curious" animation="idle" enableBlinking interactive />
+ * <AlienCharacter animation="idle" behaviour="curious" interactive />
  * ```
  */
 export function AlienCharacter({
-  animation = 'idle',
+  controller: external,
+  animation,
+  behaviour,
   expression,
   palette = 'grape',
   eyeShape = 'oval',
@@ -66,92 +65,86 @@ export function AlienCharacter({
   ears = 'none',
   crown = 'fronds',
   accessories = ['collar'],
-  animationStyle = 'playful',
   quality = 'balanced',
-  enableBlinking = true,
+  settings,
   interactive = true,
-  trackPointer = true,
   paused = false,
-  greetOnMount = true,
-  restAfter = 0,
-  speechLevel = null,
   shadowColor = '#9c6f6a',
-  onAnimationChange,
-  onPoke,
+  onTouch,
   onReady,
-  controllerRef,
+  onError,
   position,
   rotation,
   scale,
 }: AlienCharacterProps) {
   const spec = useMemo(() => ({ head, ears, crown }), [head, ears, crown]);
-  const [data, setData] = useState<{ key: string; mesh: BodyMeshData } | null>(null);
-  const brain = useRef<AlienBrain>(null!);
-  if (!brain.current) brain.current = new AlienBrain();
-  if (import.meta.env.DEV) (window as unknown as { __oru: AlienBrain }).__oru = brain.current;
-  const greeted = useRef(false);
-  const lastInteraction = useRef(performance.now());
+  const [data, setData] = useState<BodyMeshData | null>(null);
+  const internal = useRef<AnimationController | null>(null);
+  if (!external && !internal.current) internal.current = new AnimationController();
+  const controller = external ?? internal.current!;
   const pointer = useRef({ x: 0, y: 0, moved: -1e9 });
-  const speech = useRef<number | null>(speechLevel);
-  speech.current = speechLevel;
-  const callbacks = useRef({ onAnimationChange, onPoke, onReady });
-  callbacks.current = { onAnimationChange, onPoke, onReady };
+  const callbacks = useRef({ onTouch, onReady, onError });
+  callbacks.current = { onTouch, onReady, onError };
   const { camera, gl } = useThree();
+  if (import.meta.env.DEV) (window as unknown as { __oru: AnimationController }).__oru = controller;
 
-  // Build (or fetch from cache) the sculpted body mesh off the main thread.
   useEffect(() => {
     let alive = true;
-    const key = `${head}|${ears}|${crown}|${quality}`;
-    requestBodyMesh(spec, quality).then((mesh) => alive && setData({ key, mesh }));
+    requestBodyMesh(spec, quality)
+      .then((mesh) => alive && setData(mesh))
+      .catch((e) => callbacks.current.onError?.(e));
     return () => {
       alive = false;
     };
-  }, [spec, quality, head, ears, crown]);
+  }, [spec, quality]);
 
-  const rig = useMemo(() => (data ? new AlienRig(spec, data.mesh, resolvePalette(palette)) : null),
+  const rig = useMemo(() => {
+    if (!data) return null;
+    try {
+      return new AlienRig(spec, data, resolvePalette(palette));
+    } catch (e) {
+      callbacks.current.onError?.(e);
+      return null;
+    }
+    // Palette changes are applied without rebuilding (below).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data]);
+  }, [data]);
 
   useEffect(() => {
     if (!rig) return;
-    // Only colliders take part in raycasting: keeps pointer events cheap.
+    // Only invisible colliders take part in raycasting: pointer events stay cheap.
     const colliders = new Set(rig.colliders);
     rig.root.traverse((o) => {
       if (!colliders.has(o as THREE.Mesh)) o.raycast = () => {};
     });
     callbacks.current.onReady?.();
-    if (greetOnMount && !greeted.current) {
-      greeted.current = true;
-      brain.current.setState('greeting', true);
-    }
     return () => rig.dispose();
-  }, [rig, greetOnMount]);
+  }, [rig]);
 
-  // Cheap customisation: no rebuilds.
   useEffect(() => rig?.setPalette(resolvePalette(palette)), [rig, palette]);
   useEffect(() => rig?.setShadowColor(shadowColor), [rig, shadowColor]);
   useEffect(() => rig?.setEyeShape(eyeShape), [rig, eyeShape]);
   useEffect(() => rig?.setBrowShape(browShape), [rig, browShape]);
   useEffect(() => rig?.setAccessories(accessories), [rig, accessories]);
-  useEffect(() => rig?.setJiggle(ANIMATION_STYLES[animationStyle].jiggle), [rig, animationStyle]);
-
   useEffect(() => {
-    brain.current.onStateChange = (s) => callbacks.current.onAnimationChange?.(s);
-  }, []);
-
+    if (settings) controller.configure(settings);
+    rig?.setJiggle(ANIMATION_STYLES[controller.settings.style].jiggle * (controller.settings.reducedMotion ? 0.4 : 1));
+  }, [rig, controller, settings]);
+  useEffect(() => controller.configure({ expressionOverride: expression ?? null }), [controller, expression]);
   useEffect(() => {
-    if (brain.current.state !== animation) brain.current.setState(animation);
-    lastInteraction.current = performance.now();
-  }, [animation]);
+    if (animation) controller.request(animation, { reason: 'prop' });
+  }, [controller, animation]);
+  useEffect(() => {
+    if (behaviour) controller.setBehaviour(behaviour);
+  }, [controller, behaviour]);
 
-  // Track the pointer across the whole page, not just over the canvas.
+  // Attention follows the pointer anywhere on the page, not just over the canvas.
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       const r = gl.domElement.getBoundingClientRect();
       pointer.current.x = ((e.clientX - r.left) / r.width) * 2 - 1;
       pointer.current.y = -((e.clientY - r.top) / r.height) * 2 + 1;
       pointer.current.moved = performance.now();
-      lastInteraction.current = pointer.current.moved;
     };
     window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('pointerdown', onMove, { passive: true });
@@ -161,50 +154,43 @@ export function AlienCharacter({
     };
   }, [gl]);
 
-  useImperativeHandle(controllerRef, () => ({
-    play: (s) => brain.current.setState(s, true),
-    poke: (zone = 'belly') => brain.current.poke(zone),
-    setSpeechLevel: (level) => {
-      speech.current = level;
-    },
-    getState: () => brain.current.state,
+  const scratch = useMemo(() => ({
+    raycaster: new THREE.Raycaster(), plane: new THREE.Plane(), eye: new THREE.Vector3(), normal: new THREE.Vector3(),
+    hit: new THREE.Vector3(), ndc: new THREE.Vector2(), last: { yaw: 0, pitch: 0 }, cam: new THREE.Vector3(),
+  }), []);
+  const input = useMemo(() => ({
+    camera: { yaw: 0, pitch: 0, valid: false },
+    pointer: { yaw: 0, pitch: 0, active: false, speed: 0 },
   }), []);
 
-  const raycaster = useMemo(() => new THREE.Raycaster(), []);
-  const plane = useMemo(() => new THREE.Plane(), []);
-  const scratch = useMemo(() => ({ eye: new THREE.Vector3(), normal: new THREE.Vector3(), hit: new THREE.Vector3(), ndc: new THREE.Vector2() }), []);
-
   useFrame((_, dt) => {
-    if (!rig || paused) return;
+    if (!rig || paused || document.hidden) return;
     const now = performance.now();
-    if (restAfter > 0 && brain.current.state === 'idle' && now - lastInteraction.current > restAfter * 1000) {
-      brain.current.setState('sleep', true);
-    }
-    // Project the pointer onto a plane facing the camera just in front of the face.
-    let yaw = 0, pitch = 0;
-    const active = trackPointer && now - pointer.current.moved < 2600;
+    rig.root.updateMatrixWorld();
+    // Eye contact: where the camera (the user) actually is.
+    const c = rig.gazeAnglesTo(camera.getWorldPosition(scratch.cam));
+    input.camera.yaw = c.yaw;
+    input.camera.pitch = c.pitch;
+    input.camera.valid = Math.abs(c.yaw) < 1.6;
+    // Pointer: projected onto a plane just in front of the face.
+    const active = now - pointer.current.moved < 2500;
+    input.pointer.active = active;
     if (active) {
-      rig.root.updateMatrixWorld();
       scratch.eye.set(0, rig.anatomy.eyes[0].center[1], 0.4);
       rig.root.localToWorld(scratch.eye);
       camera.getWorldDirection(scratch.normal);
-      plane.setFromNormalAndCoplanarPoint(scratch.normal, scratch.eye.clone().addScaledVector(scratch.normal, -1.1));
+      scratch.plane.setFromNormalAndCoplanarPoint(scratch.normal, scratch.eye.addScaledVector(scratch.normal, -1.1));
       scratch.ndc.set(pointer.current.x, pointer.current.y);
-      raycaster.setFromCamera(scratch.ndc, camera);
-      if (raycaster.ray.intersectPlane(plane, scratch.hit)) {
+      scratch.raycaster.setFromCamera(scratch.ndc, camera);
+      if (scratch.raycaster.ray.intersectPlane(scratch.plane, scratch.hit)) {
         const g = rig.gazeAnglesTo(scratch.hit);
-        yaw = g.yaw;
-        pitch = g.pitch;
+        input.pointer.speed = dt > 0 ? Math.hypot(g.yaw - scratch.last.yaw, g.pitch - scratch.last.pitch) / dt : 0;
+        input.pointer.yaw = g.yaw;
+        input.pointer.pitch = g.pitch;
+        scratch.last = g;
       }
     }
-    const pose = brain.current.update(dt, {
-      pointer: { yaw, pitch, active },
-      blinking: enableBlinking,
-      tracking: trackPointer,
-      expression: expression ?? null,
-      style: animationStyle,
-      speechLevel: speech.current,
-    });
+    const pose = controller.update(dt, input);
     rig.update(pose, Math.min(dt, 1 / 20));
   });
 
@@ -215,9 +201,9 @@ export function AlienCharacter({
     e.stopPropagation();
     const hit = AlienRig.zoneOf(e.object);
     const zone = hit?.zone ?? 'belly';
-    brain.current.poke(zone, hit?.side ?? 1);
-    lastInteraction.current = performance.now();
-    callbacks.current.onPoke?.(zone);
+    const side = hit?.side ?? 1;
+    if (callbacks.current.onTouch) callbacks.current.onTouch(zone, side);
+    else controller.react(zone === 'antenna' ? 'surprise' : zone === 'ear' ? 'flick' : 'giggle', { side });
   };
 
   return (

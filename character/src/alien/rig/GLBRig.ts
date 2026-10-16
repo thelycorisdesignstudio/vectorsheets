@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import type { Pose } from '../animation/brain';
+import type { Pose } from '../animation/AnimationController';
 import { clamp } from '../animation/math';
 
 /**

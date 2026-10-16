@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Anatomy, type AnatomySpec } from '../geometry/anatomy';
+import { Anatomy, LOBE_BONE_BASE, MAX_LOBES, type AnatomySpec } from '../geometry/anatomy';
 import type { BodyMeshData } from '../geometry/bodyMesh';
 import type { V3 } from '../geometry/sdf';
 import { roundedProfile, sweptTube } from '../geometry/tube';
@@ -8,7 +8,7 @@ import { createEyeMaterial, type EyeMaterial } from '../materials/eye';
 import { createMouthMaterial } from '../materials/mouthMaterial';
 import { Jiggle } from '../animation/springs';
 import { clamp, lerp, smoothstep } from '../animation/math';
-import type { Pose } from '../animation/brain';
+import type { Pose } from '../animation/AnimationController';
 import type { Accessory, BrowShape, EyeShape, Palette, TouchZone } from '../types';
 import { buildBrowGeometry, buildEyeDome, createGlowTexture, EYE_SHAPES } from './features';
 import { buildAccessories, type AccessoryHandle } from './accessories';
@@ -28,7 +28,19 @@ interface BrowRig {
   base: THREE.Vector3;
   up: THREE.Vector3;
   mesh: THREE.Mesh | null;
+  mat: ToonMaterial;
 }
+
+interface LobeRig {
+  bone: THREE.Bone;
+  /** -1 left … 1 right: which way the lobe leans */
+  lean: number;
+  index: number;
+  jx: Jiggle;
+  jz: Jiggle;
+}
+
+const BROW_HALF: Record<BrowShape, number> = { pill: 0.11, arched: 0.1, tuft: 0.085, dots: 0.065, none: 0.1 };
 
 interface AntennaRig {
   bones: THREE.Bone[];
@@ -72,7 +84,8 @@ export class AlienRig {
   private crown = new THREE.Bone();
   private body: THREE.SkinnedMesh;
   private skinMat: ToonMaterial;
-  private browMat: ToonMaterial;
+  private lobes: LobeRig[] = [];
+  private browShape: BrowShape = 'pill';
   private antennaMat: ToonMaterial;
   private mouthMat: THREE.ShaderMaterial;
   private colliderMat = new THREE.MeshBasicMaterial({ visible: false });
@@ -99,6 +112,8 @@ export class AlienRig {
   private jiggleScale = 1;
   private shadow: THREE.Mesh;
   private shadowMat: THREE.MeshBasicMaterial;
+  private feet: THREE.Mesh[] = [];
+  private footMat: THREE.MeshBasicMaterial;
 
   constructor(spec: AnatomySpec, data: BodyMeshData, palette: Palette) {
     this.anatomy = new Anatomy(spec);
@@ -108,10 +123,9 @@ export class AlienRig {
     this.root.add(this.mover);
 
     this.skinMat = createToonMaterial({ masks: true });
-    this.browMat = createToonMaterial({ shade: 0.7 });
     this.antennaMat = createToonMaterial({ gradient: [0, 0.3] });
     this.mouthMat = createMouthMaterial(palette);
-    this.disposables.push(this.skinMat, this.browMat, this.antennaMat, this.mouthMat, this.colliderMat, this.glowTex, this.eyeGeo);
+    this.disposables.push(this.skinMat, this.antennaMat, this.mouthMat, this.colliderMat, this.glowTex, this.eyeGeo);
 
     // --- Skeleton --------------------------------------------------------
     const named = (b: THREE.Bone, n: string) => ((b.name = n), b);
@@ -137,6 +151,16 @@ export class AlienRig {
     this.armL.add(this.foreL);
     this.armR.add(this.foreR);
     this.head.add(this.earL, this.earR, this.crown);
+    // One bone per crown lobe so each can move with the mood and ripple on its own.
+    a.lobes.slice(0, MAX_LOBES).forEach((l, i) => {
+      const bone = new THREE.Bone();
+      bone.name = `crown_${i}`;
+      bone.position.copy(v3(l.a)).sub(v3(a.crownPivot));
+      this.crown.add(bone);
+      const len = Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1], l.b[2] - l.a[2]);
+      const stiff = 150 / (0.6 + len * 2.2);
+      this.lobes.push({ bone, lean: clamp((l.b[0] - l.a[0]) / Math.max(1e-3, len), -1, 1), index: i, jx: new Jiggle(stiff, 6), jz: new Jiggle(stiff, 6) });
+    });
 
     // --- Body -----------------------------------------------------------
     const geo = new THREE.BufferGeometry();
@@ -168,14 +192,26 @@ export class AlienRig {
     this.shadow.position.y = 0.002;
     this.shadow.renderOrder = -1;
     this.root.add(this.shadow);
-    this.disposables.push(this.shadowMat, shadowGeo);
+    // Tighter, darker contact under each foot grounds the character.
+    this.footMat = new THREE.MeshBasicMaterial({ map: this.glowTex, transparent: true, depthWrite: false, opacity: 0.4, toneMapped: false });
+    for (const side of [1, -1]) {
+      const f = new THREE.Mesh(shadowGeo, this.footMat);
+      f.position.set(0.165 * side, 0.003, 0.07);
+      f.scale.set(0.34, 1, 0.4);
+      f.renderOrder = -1;
+      f.userData.x = 0.165 * side;
+      this.root.add(f);
+      this.feet.push(f);
+    }
+    this.disposables.push(this.shadowMat, this.footMat, shadowGeo);
 
     this.accessories = buildAccessories(a, { mover: this.mover, head: this.head, crown: this.crown }, palette);
 
     this.mover.updateMatrixWorld(true);
-    this.body.bind(new THREE.Skeleton([
-      this.hips, this.head, this.armL, this.armR, this.earL, this.earR, this.crown, this.foreL, this.foreR,
-    ]));
+    // Skeleton order must match the bone slots baked by bodyMesh (BONE + lobe bones).
+    const bones = [this.hips, this.head, this.armL, this.armR, this.earL, this.earR, this.crown, this.foreL, this.foreR];
+    for (let i = 0; i < MAX_LOBES; i++) bones[LOBE_BONE_BASE + i] = this.lobes[i]?.bone ?? this.crown;
+    this.body.bind(new THREE.Skeleton(bones));
     this.setPalette(palette);
   }
 
@@ -214,7 +250,10 @@ export class AlienRig {
       const y = new THREE.Vector3().crossVectors(n, x);
       anchor.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, n));
       this.head.add(anchor);
-      this.brows.push({ side: lm.side, anchor, base, up: y, mesh: null });
+      const mat = createToonMaterial({ shade: 0.7, brow: true });
+      mat.uniforms.uBrowSide.value = lm.side;
+      this.disposables.push(mat);
+      this.brows.push({ side: lm.side, anchor, base, up: y, mesh: null, mat });
     }
   }
 
@@ -379,6 +418,7 @@ export class AlienRig {
 
   setShadowColor(color: THREE.ColorRepresentation) {
     this.shadowMat.color.set(color);
+    this.footMat.color.set(color).multiplyScalar(0.8);
   }
 
   setPalette(p: Palette) {
@@ -388,10 +428,12 @@ export class AlienRig {
     u.uTip.value.set(p.tip);
     u.uBlush.value.set(p.blush);
     shadowMultiplier(p.shadow, p.base, u.uShadowMul.value);
-    const bu = this.browMat.uniforms;
-    bu.uColor.value.set(p.brow);
-    bu.uColorLow.value.set(p.brow);
-    shadowMultiplier(p.shadow, p.base, bu.uShadowMul.value);
+    for (const b of this.brows) {
+      const bu = b.mat.uniforms;
+      bu.uColor.value.set(p.brow);
+      bu.uColorLow.value.set(p.brow);
+      shadowMultiplier(p.shadow, p.base, bu.uShadowMul.value);
+    }
     const au = this.antennaMat.uniforms;
     au.uColor.value.set(p.base);
     au.uColorLow.value.set(p.base);
@@ -418,12 +460,13 @@ export class AlienRig {
     this.eyeShape = shape;
     const [sx, sy] = EYE_SHAPES[shape].size;
     for (const e of this.eyes) {
-      e.mesh.scale.set(sx, sy, 0.034);
+      e.mesh.scale.set(sx, sy, 0.046);
       e.mat.uniforms.uAspect.value = sy / sx;
     }
   }
 
   setBrowShape(shape: BrowShape) {
+    this.browShape = shape;
     const base = buildBrowGeometry(shape);
     for (const b of this.brows) {
       if (b.mesh) {
@@ -445,7 +488,8 @@ export class AlienRig {
         }
         index.needsUpdate = true;
       }
-      b.mesh = new THREE.Mesh(geo, this.browMat);
+      b.mesh = new THREE.Mesh(geo, b.mat);
+      b.mat.uniforms.uBrowHalf.value = BROW_HALF[shape];
       b.anchor.add(b.mesh);
     }
     base?.dispose();
@@ -484,7 +528,12 @@ export class AlienRig {
     const lift = clamp(b.rootY / 0.12, 0, 1);
     this.shadow.position.set(b.rootX, 0.002, b.rootZ + 0.03);
     this.shadow.scale.set(1.25 * (1 - lift * 0.18) * xz, 1, 0.78 * (1 - lift * 0.18) * xz);
-    this.shadowMat.opacity = 0.34 * (1 - lift * 0.35);
+    this.shadowMat.opacity = 0.3 * (1 - lift * 0.35);
+    for (const f of this.feet) {
+      f.position.set(f.userData.x * xz + b.rootX, 0.003, 0.07 + b.rootZ);
+      f.scale.set(0.34 * (1 + lift * 0.6), 1, 0.4 * (1 + lift * 0.6));
+      this.footMat.opacity = 0.42 * (1 - lift);
+    }
 
     const hj = this.headJiggle.update(-b.rootRz * 0.4, dt);
     this.head.rotation.set(b.headRx, b.headRy, b.headRz + hj * 0.3);
@@ -505,7 +554,9 @@ export class AlienRig {
       const js = this.jiggleScale;
       const cz = this.crownJiggle.z.update(clamp(-spinZ * 0.03 - this.headVel.x * 0.12, -0.3, 0.3) * js, dt);
       const cx = this.crownJiggle.x.update(clamp(-spinX * 0.03 + this.headVel.y * 0.18 - this.headVel.z * 0.1, -0.3, 0.3) * js, dt);
+      if (pose.kick > 0) this.crownJiggle.x.kick(-3 * pose.kick);
       this.crown.rotation.set(cx, 0, cz);
+      this.updateLobes(pose, dt, spinZ, b.earL);
       const jl = this.earJiggle[0].update(clamp(spinZ * 0.04 + this.headVel.y * 0.2, -0.4, 0.4) * js, dt);
       const jr = this.earJiggle[1].update(clamp(spinZ * 0.04 - this.headVel.y * 0.2, -0.4, 0.4) * js, dt);
       const perk = this.anatomy.spec.ears === 'fins' ? 0.3 : 0.15;
@@ -520,6 +571,33 @@ export class AlienRig {
     this.updateMouth(f);
     this.updateAntennae(pose, dt, f.glow + b.glow);
     this.skinMat.uniforms.uBlushAmount.value = clamp(0.55 + f.blush * 0.5, 0, 1);
+    this.skinMat.uniforms.uJaw.value = clamp(f.jaw, 0, 1.2);
+    this.skinMat.uniforms.uCheek.value = clamp(f.cheek, -0.5, 1.2);
+  }
+
+  /**
+   * Crown lobes carry mood: they stand up and fan out when the character is
+   * bright, droop and spread when it's low, ripple gently at rest and lag
+   * behind fast head motion — each lobe a little differently.
+   */
+  private updateLobes(pose: Pose, dt: number, spinZ: number, perk: number) {
+    const t = pose.time;
+    const mood = clamp(perk, -1, 1.2);
+    const ripple = (0.035 + pose.flourish * 0.09) * this.jiggleScale;
+    for (const l of this.lobes) {
+      const side = Math.sign(l.lean) || 0;
+      const up = mood > 0 ? mood * 0.12 : mood * 0.42; // + toward upright, − droop outward
+      const wave = Math.sin(t * (1.7 + pose.flourish * 4) - l.index * 0.95) * ripple;
+      const sway = Math.sin(t * 1.25 - l.index * 0.7) * ripple * 0.7;
+      const jz = l.jz.update(clamp(-spinZ * 0.035 - this.headVel.x * 0.15, -0.35, 0.35) * this.jiggleScale, dt);
+      const jx = l.jx.update(clamp(this.headVel.y * 0.25 - this.headVel.z * 0.12, -0.35, 0.35) * this.jiggleScale, dt);
+      if (pose.kick > 0) l.jx.kick((-2.5 - l.index * 0.4) * pose.kick);
+      l.bone.rotation.set(
+        (mood < 0 ? -mood * 0.22 : -mood * 0.06) + sway + jx,
+        0,
+        side * up + Math.abs(l.lean) * 0 + wave + jz,
+      );
+    }
   }
 
   private updateEyes(pose: Pose, f: Pose['face']) {
@@ -530,18 +608,22 @@ export class AlienRig {
     for (const e of this.eyes) {
       const u = e.mat.uniforms;
       const sc = f.eyeScale * (1 - blink * 0.06);
-      e.group.scale.set(sc, sc * (1 - blink * 0.1), 1);
-      // Upper lid: fully open sits just above the eye; follows vertical gaze slightly.
-      const lower = lerp(-1.25, -0.02, clamp(f.lidLower, 0, 1));
+      const sq = clamp(f.eyeSquash, 0.75, 1.2);
+      e.group.scale.set(sc * (1 + (1 - sq) * 0.35), sc * sq * (1 - blink * 0.1), 1);
+      // Lower lid rises into a crescent for smiling eyes.
+      const ll = clamp(f.lidLower, 0, 1.1);
+      const lower = lerp(-1.25, 0.12, ll);
       const curveU = 0.22 + 0.1 * (1 - clamp(f.lidUpper, 0, 1));
-      const curveL = 0.18 + 0.32 * clamp(f.lidLower, 0, 1);
+      const curveL = 0.18 + 0.62 * ll;
       // Fully closed: the upper lid edge tucks just under the lower lid everywhere.
       const closed = lower + Math.min(curveU, curveL) - 0.015;
       let upper = lerp(closed, 1.18, clamp(f.lidUpper, 0, 1.3)) - pitch * 0.25 * clamp(f.lidUpper, 0, 1);
       upper = lerp(upper, closed, blink);
       u.uLids.value.set(Math.max(upper, closed), lower, curveU, curveL);
-      u.uLidTilt.value = preset.lidTilt - f.browTilt * 0.22;
-      const px = clamp(yaw * 0.85, -0.42, 0.42);
+      // Lid slant: sad droops the outer corners, determined drops the inner ones.
+      u.uLidTilt.value = preset.lidTilt + clamp(f.lidTilt, -1.2, 1.2) * 0.42;
+      // Each eye converges slightly toward near targets (independent pupils).
+      const px = clamp((yaw - pose.vergence * e.side) * 0.85, -0.42, 0.42);
       const py = clamp(-pitch * 0.85, -0.4, 0.4);
       u.uPupilPos.value.set(px, py);
       u.uPupilSize.value = clamp(0.22 + f.pupil * 0.5, 0.2, 0.66);
@@ -549,10 +631,17 @@ export class AlienRig {
   }
 
   private updateBrows(f: Pose['face']) {
+    const scale = BROW_HALF[this.browShape] / 0.11;
     for (const b of this.brows) {
-      const lift = (f.browRaise + f.browAsym * b.side * 0.55) * 0.04;
-      b.anchor.position.copy(b.base).addScaledVector(b.up, lift);
-      if (b.mesh) b.mesh.rotation.z = f.browTilt * 0.3 * b.side;
+      const raise = clamp(f.browRaise, -0.6, 1.3) * 0.044 + clamp(f.browAsym, -1.2, 1.2) * b.side * 0.026;
+      const tilt = clamp(f.browTilt, -1.2, 1.2);
+      b.anchor.position.copy(b.base).addScaledVector(b.up, raise);
+      const u = b.mat.uniforms;
+      // Worried: inner ends lift, outer ends fall. Determined: inner ends press down.
+      u.uBrowInner.value = (-tilt * 0.036) * scale;
+      u.uBrowOuter.value = (tilt * 0.012 - Math.max(0, -tilt) * 0.012) * scale;
+      u.uBrowArch.value = (clamp(f.browArch, -0.6, 1.2) * 0.018 + Math.max(0, f.browRaise) * 0.006) * scale;
+      if (b.mesh) b.mesh.rotation.z = 0;
     }
   }
 
@@ -563,7 +652,7 @@ export class AlienRig {
     const arr = pos.array as Float32Array;
     const open = clamp(f.mouthOpen, 0, 1.1);
     const round = clamp(f.mouthRound, 0, 1);
-    const smile = clamp(f.smile, -1, 1.3);
+    const smile = clamp(f.smile, -1, 1.4);
     const W = 0.112 * clamp(f.mouthWidth, 0.4, 1.6) * (1 - 0.4 * round) * (1 + 0.15 * open);
     const minT = 0.024;
     const out = this.patchScratch;
@@ -572,7 +661,8 @@ export class AlienRig {
       const s2 = s * s;
       const x = s * W;
       // Upper edge: smile lifts the corners; an open smile flattens the top (D shape).
-      const upper = smile * 0.03 * s2 * (1 - 0.55 * open) - smile * 0.006 + f.mouthAsym * 0.022 * s + open * 0.01;
+      const wave = clamp(f.mouthWave, 0, 1) * 0.011 * Math.sin(s * Math.PI * 1.5) * (1 - open * 0.6);
+      const upper = smile * 0.036 * s2 * (1 - 0.5 * open) - smile * 0.007 + f.mouthAsym * 0.024 * s + open * 0.01 + wave;
       const flat = Math.pow(Math.max(0, 1 - s2), 0.55);
       const ell = Math.sqrt(Math.max(0, 1 - s2));
       const closedProfile = Math.pow(Math.max(0, 1 - s2), 0.35);
@@ -591,6 +681,8 @@ export class AlienRig {
     }
     pos.needsUpdate = true;
     this.mouthMat.uniforms.uOpen.value = open;
+    this.mouthMat.uniforms.uTeethAmount.value = clamp(f.teeth, 0, 1);
+    this.mouthMat.uniforms.uTongueUp.value = clamp(f.tongue, 0, 1);
   }
 
   private updateAntennae(pose: Pose, dt: number, glow: number) {
@@ -601,7 +693,7 @@ export class AlienRig {
         ant.sim.copy(target);
         ant.initialised = true;
       }
-      if (pose.antennaKick > 0) ant.vel.add(new THREE.Vector3(1.2, 1.4, 0.8).multiplyScalar(pose.antennaKick));
+      if (pose.kick > 0) ant.vel.add(new THREE.Vector3(1.2, 1.4, 0.8).multiplyScalar(pose.kick));
       const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
       const h = dt / steps;
       for (let i = 0; i < steps; i++) {

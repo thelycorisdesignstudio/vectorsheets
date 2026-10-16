@@ -11,6 +11,7 @@ import { connectDatabase } from './db.js';
 import { createWorkbook, deleteWorkbook, getWorkbook, listWorkbooks, updateWorkbook } from './store.js';
 import { aiRuntimeConfig, generateWorkbook } from './services/aiGenerator.js';
 import { emptyGrid, normalizeGrid } from './services/generator.js';
+import { companionReply, companionRequestSchema, companionStatus } from './services/companion.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -171,6 +172,23 @@ app.post('/api/generate', async (req, res, next) => {
         lastError: generated.fallbackReason || ''
       }
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/companion/status', (_req, res) => {
+  res.json(companionStatus());
+});
+
+app.post('/api/companion/reply', async (req, res, next) => {
+  try {
+    const parsed = companionRequestSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid companion request.' });
+    const reply = await companionReply(parsed.data);
+    // No provider configured: say so honestly; the client falls back to its scripted demo.
+    if (!reply) return res.status(503).json({ error: 'No conversation model is configured on the server.', configured: false });
+    res.json(reply);
   } catch (error) {
     next(error);
   }

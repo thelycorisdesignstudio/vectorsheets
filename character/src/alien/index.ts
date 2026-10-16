@@ -1,5 +1,9 @@
 export { AlienCharacter, type AlienCharacterProps } from './AlienCharacter';
-export { AlienBrain, type Pose } from './animation/brain';
+export { AnimationController, type Pose, type ControllerSettings, type ControllerSnapshot, type FrameInput } from './animation/AnimationController';
+export { BEHAVIOURS, REACTIONS, ExpressionController } from './animation/expression';
+export { SpeechAnimationController, type SpeechSessionInput, type SpeechSyncSource } from './animation/speech/SpeechAnimationController';
+export { textToTimeline, wordToVisemes } from './animation/speech/textToVisemes';
+export * from './animation/speech/visemes';
 export { AlienRig } from './rig/AlienRig';
 export { PALETTES, resolvePalette } from './config/palettes';
 export { EXPRESSIONS, EXPRESSION_LABELS } from './config/expressions';

@@ -6,12 +6,27 @@
 export class Spring {
   value: number;
   velocity = 0;
-  constructor(value = 0, public frequency = 8) {
+  /**
+   * @param zeta damping ratio: 1 = critically damped (no overshoot);
+   *   ~0.7 gives the small, lively overshoot animators use for faces.
+   */
+  constructor(value = 0, public frequency = 8, public zeta = 1) {
     this.value = value;
   }
   update(target: number, dt: number, frequency = this.frequency) {
     if (dt <= 0) return this.value;
     const omega = frequency;
+    if (this.zeta < 1) {
+      // Underdamped: semi-implicit Euler in small, stable sub-steps.
+      const steps = Math.max(1, Math.ceil(dt / (1 / 240)));
+      const h = dt / steps;
+      for (let i = 0; i < steps; i++) {
+        const a = -2 * this.zeta * omega * this.velocity - omega * omega * (this.value - target);
+        this.velocity += a * h;
+        this.value += this.velocity * h;
+      }
+      return this.value;
+    }
     // Exact integration of a critically damped oscillator (stable at any dt).
     const x = this.value - target;
     const exp = Math.exp(-omega * dt);
@@ -31,9 +46,9 @@ export class Spring {
 export class SpringRecord<K extends string> {
   private springs = {} as Record<K, Spring>;
   readonly value = {} as Record<K, number>;
-  constructor(initial: Record<K, number>, frequency = 8) {
+  constructor(initial: Record<K, number>, frequency = 8, zeta = 1) {
     for (const key of Object.keys(initial) as K[]) {
-      this.springs[key] = new Spring(initial[key], frequency);
+      this.springs[key] = new Spring(initial[key], frequency, zeta);
       this.value[key] = initial[key];
     }
   }

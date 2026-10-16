@@ -16,6 +16,7 @@ export function createMouthMaterial(p: Palette) {
       uTeeth: { value: new THREE.Color(p.teeth) },
       uOpen: { value: 0 },
       uTeethAmount: { value: 1 },
+      uTongueUp: { value: 0 },
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
@@ -31,6 +32,7 @@ export function createMouthMaterial(p: Palette) {
       uniform vec3 uTeeth;
       uniform float uOpen;
       uniform float uTeethAmount;
+      uniform float uTongueUp;
       varying vec2 vUv;
       void main() {
         float s = abs(vUv.x);
@@ -38,13 +40,13 @@ export function createMouthMaterial(p: Palette) {
         float openness = smoothstep(0.04, 0.2, uOpen);
         vec3 c = uMouth;
         // Tongue: a soft mound filling the lower half.
-        float tongueTop = 0.55 + 0.25 * s * s;
+        float tongueTop = 0.55 - 0.3 * uTongueUp + 0.25 * s * s;
         float tongue = smoothstep(tongueTop - 0.04, tongueTop + 0.04, t) * smoothstep(0.98, 0.7, s);
         c = mix(c, uTongue, tongue);
         // Teeth: a white band under the upper edge, rounded at its ends.
         float band = 0.2 - 0.06 * s * s;
         float teeth = (1.0 - smoothstep(band - 0.03, band + 0.03, t)) * (1.0 - smoothstep(0.62, 0.7, s));
-        c = mix(c, uTeeth, teeth * uTeethAmount * smoothstep(0.18, 0.35, uOpen));
+        c = mix(c, uTeeth, teeth * uTeethAmount * smoothstep(0.08, 0.25, uOpen));
         c = mix(uLip, c, openness);
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>

@@ -50,6 +50,8 @@ export interface Clip {
   tracks: Partial<Record<Channel, readonly Key[]>>;
   /** Fade in / out time used when the clip starts or is interrupted. */
   blend?: number;
+  /** Channels this clip owns: lower layers (idle sway, held pose) are suppressed there while it plays. */
+  override?: Channel[];
 }
 
 export function sampleTrack(keys: readonly Key[], t: number): number {
@@ -78,57 +80,66 @@ export function sampleTrack(keys: readonly Key[], t: number): number {
   );
 }
 
-/** Plays one clip at a time with a cross-fade envelope. */
-export class ClipPlayer {
-  private clip: Clip | null = null;
-  private time = 0;
-  private fading: { clip: Clip; time: number; weight: number } | null = null;
+interface ActiveClip {
+  name: string;
+  clip: Clip;
+  time: number;
+  /** fade-out weight when stopped early (1 = normal) */
+  fade: number;
+  stopping: boolean;
+}
 
-  play(clip: Clip) {
-    if (this.clip) this.fading = { clip: this.clip, time: this.time, weight: this.envelope(this.clip, this.time) };
-    this.clip = clip;
-    this.time = 0;
+/**
+ * Gesture layer: several additive clips can play at once (a nod during a
+ * greeting, a startle over speech). Each has an envelope; stopping fades it
+ * out instead of cutting. Override masks tell lower layers to yield.
+ */
+export class ClipLayer {
+  private clips: ActiveClip[] = [];
+  /** 0..1 per channel: how strongly active clips own it this frame */
+  readonly ownership = emptyChannels();
+
+  play(name: string, clip: Clip) {
+    // Restarting the same clip fades the old instance out.
+    for (const c of this.clips) if (c.name === name) c.stopping = true;
+    this.clips.push({ name, clip, time: 0, fade: 1, stopping: false });
+    if (this.clips.length > 6) this.clips.shift();
   }
 
-  get active() {
-    return this.clip !== null;
+  stop(name?: string) {
+    for (const c of this.clips) if (!name || c.name === name) c.stopping = true;
   }
 
-  get progress() {
-    return this.clip ? this.time / this.clip.duration : 1;
+  isPlaying(name?: string) {
+    return this.clips.some((c) => !c.stopping && (!name || c.name === name));
   }
 
-  private envelope(clip: Clip, t: number) {
-    const b = clip.blend ?? 0.12;
-    const fin = Math.min(1, t / b);
-    const fout = Math.min(1, (clip.duration - t) / b);
-    return Math.max(0, Math.min(fin, fout));
+  get names() {
+    return this.clips.filter((c) => !c.stopping).map((c) => c.name);
   }
 
-  /** Accumulates the clip's additive offsets into `out`. */
+  private envelope(c: ActiveClip) {
+    const b = c.clip.blend ?? 0.12;
+    const fin = Math.min(1, c.time / b);
+    const fout = Math.min(1, (c.clip.duration - c.time) / b);
+    return Math.max(0, Math.min(fin, fout)) * c.fade;
+  }
+
   update(dt: number, out: ChannelRecord, scale = 1) {
-    if (this.fading) {
-      const f = this.fading;
-      f.time += dt;
-      f.weight -= dt / 0.18;
-      if (f.weight <= 0 || f.time >= f.clip.duration) this.fading = null;
-      else this.accumulate(f.clip, f.time, f.weight * scale, out);
+    for (const k in this.ownership) this.ownership[k as Channel] = 0;
+    for (const c of this.clips) {
+      c.time += dt;
+      if (c.stopping) c.fade -= dt / 0.2;
     }
-    if (!this.clip) return;
-    this.time += dt;
-    if (this.time >= this.clip.duration) {
-      this.clip = null;
-      return;
-    }
-    // Clips are authored to start and end at rest, so only the cross-fade needs an envelope.
-    const w = this.fading ? Math.min(1, this.time / 0.18) : 1;
-    this.accumulate(this.clip, this.time, w * scale, out);
-  }
-
-  private accumulate(clip: Clip, t: number, w: number, out: ChannelRecord) {
-    for (const ch in clip.tracks) {
-      const keys = clip.tracks[ch as Channel]!;
-      out[ch as Channel] += sampleTrack(keys, t) * w;
+    this.clips = this.clips.filter((c) => c.time < c.clip.duration && c.fade > 0);
+    for (const c of this.clips) {
+      // Authored clips start/end at rest, so the envelope only matters for early stops.
+      const w = (c.stopping ? this.envelope(c) : Math.min(1, c.fade)) * scale;
+      for (const ch in c.clip.tracks) out[ch as Channel] += sampleTrack(c.clip.tracks[ch as Channel]!, c.time) * w;
+      if (c.clip.override) {
+        const e = Math.min(1, this.envelope(c) * 1.5);
+        for (const ch of c.clip.override) this.ownership[ch] = Math.max(this.ownership[ch], e);
+      }
     }
   }
 }

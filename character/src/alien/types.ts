@@ -1,15 +1,26 @@
 /** Public, typed vocabulary of the Oru character system. */
 
+/** Explicit animation states. Each has entry, behaviour and exit rules (config/states.ts). */
 export type AnimationState =
   | 'idle'
   | 'listening'
   | 'thinking'
+  | 'preparing'
   | 'speaking'
-  | 'happy'
-  | 'curious'
-  | 'surprised'
+  | 'reacting'
   | 'greeting'
+  | 'waiting'
+  | 'farewell'
   | 'sleep';
+
+/** Short, expressive reactions layered on top of a state. */
+export type ReactionKind = 'surprise' | 'delight' | 'curious' | 'giggle' | 'acknowledge' | 'yield' | 'empathy' | 'flick';
+
+/**
+ * High-level presentation instructions. They translate into bounded
+ * animation parameters — never into arbitrary geometry or code.
+ */
+export type Behaviour = 'neutral' | 'attentive' | 'curious' | 'excited' | 'calm' | 'playful' | 'thoughtful' | 'reassuring';
 
 export type ExpressionName =
   | 'neutral'
@@ -20,7 +31,13 @@ export type ExpressionName =
   | 'thinking'
   | 'listening'
   | 'concerned'
-  | 'playful';
+  | 'playful'
+  | 'content'
+  | 'sad'
+  | 'shy'
+  | 'adoring'
+  | 'determined'
+  | 'confused';
 
 export type PaletteName = 'grape' | 'tangerine' | 'mint' | 'bubblegum' | 'lagoon';
 export type EyeShape = 'oval' | 'round' | 'almond' | 'droplet';
@@ -71,6 +88,25 @@ export interface FaceParams {
   headTilt: number;
   /** Bias for head pitch (rad), positive looks down */
   headPitch: number;
+  /** Jaw drop deforming the lower face (speech) */
+  jaw: number;
+  /** Cheek lift / puff */
+  cheek: number;
+  /** Upper teeth visibility */
+  teeth: number;
+  /** Tongue visibility */
+  tongue: number;
+  /** -1 sad (outer lid corners droop) … 1 fierce (inner corners drop) */
+  lidTilt: number;
+  /** Vertical eye scale: <1 squints (joy), >1 stretches (surprise) */
+  eyeSquash: number;
+  /** -1 flat / kinked … 1 high arch */
+  browArch: number;
+  /** 0 steady … 1 wobbly, uncertain mouth line */
+  mouthWave: number;
+  /** Expression-level gaze bias (rad): shy looks down and away, sad looks down */
+  lookYaw: number;
+  lookPitch: number;
 }
 
 export type FaceParamKey = keyof FaceParams;
@@ -112,13 +148,4 @@ export interface CharacterAppearance {
   accessories: Accessory[];
 }
 
-export interface AlienController {
-  /** Plays an animation state, returning to the resting state afterwards if it is a one-shot. */
-  play: (state: AnimationState) => void;
-  /** Simulates a touch reaction. */
-  poke: (zone?: TouchZone) => void;
-  /** Sets the current speech amplitude (0..1). Call every frame from an audio analyser. */
-  setSpeechLevel: (level: number | null) => void;
-  /** Current state of the internal state machine. */
-  getState: () => AnimationState;
-}
+

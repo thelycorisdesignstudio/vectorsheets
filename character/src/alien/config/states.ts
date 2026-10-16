@@ -2,110 +2,161 @@ import type { Channel } from '../animation/keyframes';
 import type { ClipName } from '../animation/clips';
 import type { AnimationState, AnimationStyle, ExpressionName } from '../types';
 
-export type GazeMode = 'track' | 'viewer' | 'think' | 'wander' | 'closed';
+/** How the eyes behave while a state is active. */
+export type GazePolicy =
+  /** relaxed: mostly eye contact, occasional glances, pointer interest */
+  | 'ambient'
+  /** steady eye contact, rare short breaks */
+  | 'attentive'
+  /** look up and away, checking back now and then */
+  | 'avert'
+  /** eye contact with aversion at phrase starts (driven by speech) */
+  | 'social'
+  | 'closed';
 
 export interface MotionProfile {
-  /** Breaths per second */
+  /** breaths per second */
   breathRate: number;
   breathAmp: number;
-  /** Weight-shift sway amplitude multiplier */
-  sway: number;
-  /** Slow head drift amplitude multiplier */
-  headDrift: number;
-  /** Blinks per minute */
+  /** idle body layer weight (sway, weight shifts, head drift) */
+  idle: number;
+  /** blinks per minute */
   blinkRate: number;
-  /** Fraction of gaze the head follows */
+  /** fraction of gaze the head follows */
   headFollow: number;
 }
 
 export interface StateDefinition {
   label: string;
+  /** What this state communicates — shown in diagnostics and docs. */
+  intent: string;
   expression: ExpressionName;
-  gaze: GazeMode;
+  gaze: GazePolicy;
   motion: MotionProfile;
-  /** Held pose offsets while the state is active (smoothed). */
+  /** Held pose offsets (smoothed). */
   pose?: Partial<Record<Channel, number>>;
-  /** Keyframe clip played on entry. */
-  clip?: ClipName;
-  /** One-shot states return to the resting state after this many seconds. */
+  /** Seconds before the held pose engages (e.g. hand-to-chin only if thinking lasts). */
+  poseDelay?: number;
+  enter?: { clip?: ClipName; /** spring speed multiplier for the transition in */ speed?: number };
+  exit?: { clip?: ClipName };
+  /** Requests are deferred until this long in the state (unless forced). */
+  minDuration?: number;
+  /** Timed states move on by themselves. `resume` = return to the last persistent state. */
   duration?: number;
-  talk?: boolean;
+  next?: AnimationState | 'resume';
+  /** Speech layer may drive the mouth. */
+  speech?: boolean;
+  /** Transient states never become the resume target. */
+  transient?: boolean;
 }
 
-const base: MotionProfile = {
-  breathRate: 0.24,
-  breathAmp: 1,
-  sway: 1,
-  headDrift: 1,
-  blinkRate: 15,
-  headFollow: 0.38,
-};
+const base: MotionProfile = { breathRate: 0.24, breathAmp: 1, idle: 1, blinkRate: 15, headFollow: 0.38 };
 
 export const STATES: Record<AnimationState, StateDefinition> = {
-  idle: { label: 'Idle', expression: 'neutral', gaze: 'track', motion: base },
+  idle: {
+    label: 'Idle',
+    intent: 'Present but relaxed: breathing, weight shifts, small glances.',
+    expression: 'neutral',
+    gaze: 'ambient',
+    motion: base,
+  },
   listening: {
     label: 'Listening',
+    intent: 'The user has the floor: steady eye contact, leaning in, occasional nods.',
     expression: 'listening',
-    gaze: 'viewer',
-    motion: { ...base, breathRate: 0.26, breathAmp: 0.8, sway: 0.35, headDrift: 0.45, blinkRate: 10, headFollow: 0.3 },
+    gaze: 'attentive',
+    motion: { ...base, breathRate: 0.26, breathAmp: 0.8, idle: 0.4, blinkRate: 11, headFollow: 0.3 },
     pose: { rootRx: 0.045, headRz: 0.06, earL: 0.2, earR: 0.2 },
+    enter: { clip: 'perk', speed: 1.4 },
   },
   thinking: {
     label: 'Thinking',
+    intent: 'Working on a reply: gaze drifts up and away, a restrained thinking face.',
     expression: 'thinking',
-    gaze: 'think',
-    motion: { ...base, breathRate: 0.2, sway: 0.4, headDrift: 0.6, blinkRate: 9, headFollow: 0.55 },
+    gaze: 'avert',
+    motion: { ...base, breathRate: 0.2, idle: 0.5, blinkRate: 8, headFollow: 0.55 },
     pose: { armLx: -1.05, armLz: -0.2, elbowLx: -1.2, headRz: -0.08, rootRz: -0.02 },
+    poseDelay: 1.4,
+    enter: { clip: 'ponder' },
+    exit: { clip: 'aha' },
+    minDuration: 0.35,
+  },
+  preparing: {
+    label: 'Preparing',
+    intent: 'About to speak: eyes return to the user, an inhale, lips part.',
+    expression: 'listening',
+    gaze: 'attentive',
+    motion: { ...base, idle: 0.5, blinkRate: 6, headFollow: 0.3 },
+    enter: { clip: 'inhale', speed: 1.6 },
+    duration: 3,
+    next: 'waiting',
+    transient: true,
   },
   speaking: {
     label: 'Speaking',
+    intent: 'Holding the floor: lips follow speech, beats nod the head, eye contact with natural breaks.',
     expression: 'listening',
-    gaze: 'viewer',
-    motion: { ...base, breathRate: 0.3, sway: 0.55, headDrift: 0.7, blinkRate: 16, headFollow: 0.3 },
-    talk: true,
+    gaze: 'social',
+    motion: { ...base, breathRate: 0.3, idle: 0.6, blinkRate: 16, headFollow: 0.3 },
+    speech: true,
   },
-  happy: {
-    label: 'Happy',
+  reacting: {
+    label: 'Reacting',
+    intent: 'A brief response to an event (touch, surprise, interruption).',
     expression: 'happy',
-    gaze: 'viewer',
-    motion: { ...base, breathRate: 0.3, sway: 1.1 },
-    clip: 'happy',
-    duration: 2.6,
-  },
-  curious: {
-    label: 'Curious',
-    expression: 'curious',
-    gaze: 'track',
-    motion: { ...base, sway: 0.5, headDrift: 0.6, blinkRate: 11, headFollow: 0.55 },
-    pose: { rootRx: 0.06, rootZ: 0.02, headRx: 0.04, earL: 0.3, earR: 0.15 },
-  },
-  surprised: {
-    label: 'Surprised',
-    expression: 'surprised',
-    gaze: 'viewer',
-    motion: { ...base, breathRate: 0.4, sway: 0.2, blinkRate: 4 },
-    clip: 'surprised',
-    duration: 2.1,
+    gaze: 'attentive',
+    motion: { ...base, idle: 0.6, blinkRate: 6 },
+    duration: 1.4,
+    next: 'resume',
+    transient: true,
   },
   greeting: {
     label: 'Greeting',
+    intent: 'Welcoming the user with a hop, a wave and a light pulse.',
     expression: 'happy',
-    gaze: 'viewer',
-    motion: { ...base, sway: 0.4 },
-    clip: 'greeting',
-    duration: 2.9,
+    gaze: 'attentive',
+    motion: { ...base, idle: 0.4 },
+    enter: { clip: 'greeting', speed: 1.3 },
+    duration: 2.8,
+    minDuration: 0.9,
+    next: 'resume',
+    transient: true,
+  },
+  waiting: {
+    label: 'Waiting',
+    intent: 'Finished speaking, ready for the user: open, attentive, unhurried.',
+    expression: 'listening',
+    gaze: 'attentive',
+    motion: { ...base, breathRate: 0.22, idle: 0.6, blinkRate: 13, headFollow: 0.35 },
+    pose: { headRz: 0.04, earL: 0.15, earR: 0.15 },
+    duration: 14,
+    next: 'idle',
+  },
+  farewell: {
+    label: 'Farewell',
+    intent: 'Closing a conversation warmly before returning to idle.',
+    expression: 'happy',
+    gaze: 'attentive',
+    motion: { ...base, idle: 0.5 },
+    enter: { clip: 'farewell' },
+    duration: 2.3,
+    minDuration: 0.8,
+    next: 'idle',
+    transient: true,
   },
   sleep: {
     label: 'Rest',
+    intent: 'Nobody around: slow breathing, eyes closed, crown and ears relaxed.',
     expression: 'sleepy',
     gaze: 'closed',
-    motion: { ...base, breathRate: 0.13, breathAmp: 1.7, sway: 0.25, headDrift: 0.3, blinkRate: 0, headFollow: 0 },
+    motion: { ...base, breathRate: 0.13, breathAmp: 1.7, idle: 0.25, blinkRate: 0, headFollow: 0 },
     pose: { headRx: 0.16, headRz: 0.1, rootRx: 0.04, rootY: -0.012, armLz: -0.12, armRz: 0.12, earL: -0.3, earR: -0.3 },
+    exit: { clip: 'wake' },
   },
 };
 
 export const STATE_ORDER: AnimationState[] = [
-  'idle', 'listening', 'thinking', 'speaking', 'happy', 'curious', 'surprised', 'greeting', 'sleep',
+  'idle', 'listening', 'thinking', 'preparing', 'speaking', 'reacting', 'greeting', 'waiting', 'farewell', 'sleep',
 ];
 
 export interface StyleProfile {
