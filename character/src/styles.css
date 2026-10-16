@@ -109,7 +109,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .loading.error { color: #b5483c; }
 
 /* Conversation dock */
-.dock { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); display: grid; gap: 8px; }
+.dock { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.dock > * { min-width: 0; }
 .with-studio .dock { left: calc(50% - 170px); }
 .caption {
   margin: 0; justify-self: center; max-width: 100%; padding: 10px 16px; border-radius: 18px;
@@ -153,10 +154,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .pad.off { opacity: 0.4; }
 .pad span { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--ink); }
 .diagnostics {
-  position: absolute; left: 16px; top: 92px; width: 300px; padding: 10px 12px; border-radius: 14px;
+  position: absolute; left: 16px; top: 110px; width: 280px; padding: 10px 12px; border-radius: 14px;
   background: rgba(30, 28, 36, 0.86); color: #eae6f5; font-size: 11.5px; backdrop-filter: blur(10px);
   font-family: ui-monospace, Menlo, monospace; pointer-events: none;
 }
+.diagnostics h3 button { all: unset; cursor: pointer; pointer-events: auto; }
+.diagnostics.collapsed { width: auto; }
 .diagnostics h3, .diagnostics h4 { margin: 0 0 6px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #a49fb6; }
 .diagnostics h4 { margin-top: 8px; }
 .diagnostics dl { margin: 0; display: grid; gap: 2px; }
@@ -172,5 +175,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .with-studio .dock { display: none; }
   .diagnostics { display: none; }
   .dock { bottom: 14px; }
+  .phase { padding: 0 4px 0 8px; font-size: 0; gap: 0; }
+  .composer .send { padding: 9px 12px; }
   .caption { font-size: 14px; }
 }

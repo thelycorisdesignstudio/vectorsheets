@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LIGHT_RIG } from './lightRig';
+import { LIGHT_RIG, LIGHT_RIG_GLSL } from './lightRig';
 
 /**
  * A complete eye in one shader, drawn on a shallow dome: white sclera, a
@@ -22,6 +22,8 @@ export type EyeMaterial = THREE.ShaderMaterial & {
     uSide: { value: number };
     uAspect: { value: number };
     uCatch: { value: number };
+    uClosed: { value: number };
+    uLash: { value: THREE.Color };
   };
 };
 
@@ -38,16 +40,24 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
       uLidTilt: { value: 0 },
       uSide: { value: side },
       uAspect: { value: aspect },
+      ...LIGHT_RIG,
       uCatch: { value: 1 },
-      uKeyDir: LIGHT_RIG.uKeyDir,
+      uClosed: { value: 0 },
+      uLash: { value: new THREE.Color('#5530c9') },
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv2;
       varying vec3 vN;
+      varying vec3 vFaceN;
+      varying vec3 vView;
       void main() {
         vUv2 = position.xy;
         vN = normalize(normalMatrix * normal);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        // The face plane's normal: lids are lit as skin, not as a bulging dome.
+        vFaceN = normalize(normalMatrix * vec3(0.0, 0.0, 1.0));
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vView = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
       }
     `,
     fragmentShader: /* glsl */ `
@@ -61,10 +71,14 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
       uniform float uLidTilt;
       uniform float uSide;
       uniform float uAspect;
-      uniform vec3 uKeyDir;
       uniform float uCatch;
+      uniform float uClosed;
+      uniform vec3 uLash;
       varying vec2 vUv2;
       varying vec3 vN;
+      varying vec3 vFaceN;
+      varying vec3 vView;
+      ${LIGHT_RIG_GLSL}
       void main() {
         // Unit-disc coordinates of the eye (geometry is a unit dome scaled by the mesh).
         vec2 p = vUv2;
@@ -98,11 +112,17 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
         eye *= mix(1.0, 0.86, lidShade);
         // Thin darker crease where the lid meets the eye.
         float creaseU = smoothstep(upper + aa, upper + aa + 0.06, p.y);
-        vec3 skin = mix(uSkin * uShadowMul, uSkin, max(creaseU, lidL));
-        vec3 col = mix(eye, skin, lid);
+        vec3 skinLit = rigLight(uSkin, normalize(vFaceN), normalize(vView), uShadowMul, 1.0, 1.0, 1.0);
+        vec3 skin = mix(skinLit * mix(vec3(1.0), uShadowMul, 0.5), skinLit, max(creaseU, lidL));
         vec3 N = normalize(vN);
         float light = mix(0.82, 1.0, smoothstep(-0.55, 0.95, dot(N, uKeyDir)));
-        col *= mix(uShadowMul, vec3(1.0), light);
+        eye *= mix(uShadowMul, vec3(1.0), light);
+        vec3 col = mix(eye, skin, lid);
+        // Closed eyes read as a soft curved lash line, not an empty patch of skin.
+        float lineY = upper - 0.04;
+        float lw = 0.11 + aa;
+        float lash = (1.0 - smoothstep(lw * 0.5, lw, abs(p.y - lineY))) * smoothstep(0.98, 0.7, abs(p.x));
+        col = mix(col, uLash, lash * uClosed);
         gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
       }

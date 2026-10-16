@@ -7,6 +7,7 @@ export function Diagnostics({ platform }: { platform: Platform }) {
   const [snap, setSnap] = useState(() => platform.anim.snapshot());
   const [fps, setFps] = useState(0);
   const [, force] = useState(0);
+  const [open, setOpen] = useState(true);
   useEffect(() => {
     let frames = 0;
     let raf = 0;
@@ -46,8 +47,14 @@ export function Diagnostics({ platform }: { platform: Platform }) {
     ['Frame rate', `${fps} fps`],
   ];
   return (
-    <section className="diagnostics" aria-label="Diagnostics">
-      <h3>Diagnostics</h3>
+    <section className={`diagnostics ${open ? '' : 'collapsed'}`} aria-label="Diagnostics">
+      <h3>
+        <button onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          Diagnostics {open ? '–' : '+'}
+        </button>
+      </h3>
+      {open && (
+        <>
       <dl>
         {rows.map(([k, v]) => (
           <div key={k}>
@@ -65,6 +72,8 @@ export function Diagnostics({ platform }: { platform: Platform }) {
           </li>
         ))}
       </ol>
+        </>
+      )}
     </section>
   );
 }

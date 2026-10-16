@@ -55,13 +55,13 @@ export const EXPRESSIONS: Record<ExpressionName, FaceParams> = {
   curious: face({
     browRaise: 0.42, browAsym: 1, browArch: 0.45, browTilt: -0.1,
     lidUpper: 1.06, pupil: 0.76,
-    smile: 0.12, mouthOpen: 0.14, mouthWidth: 0.62, mouthRound: 0.65,
+    smile: 0.12, mouthOpen: 0.2, mouthWidth: 0.72, mouthRound: 0.7,
     earPerk: 0.45, glow: 0.85, headTilt: 0.22, lookYaw: 0.05,
   }),
   surprised: face({
     browRaise: 1.1, browArch: 0.9, browTilt: -0.2,
     lidUpper: 1.3, lidLower: 0, eyeScale: 1.14, eyeSquash: 1.08, pupil: 0.44,
-    smile: 0, mouthOpen: 0.7, mouthWidth: 0.62, mouthRound: 1,
+    smile: 0, mouthOpen: 0.75, mouthWidth: 0.78, mouthRound: 1,
     blush: 0.7, earPerk: 1, glow: 1.3, headPitch: -0.08,
   }),
   sleepy: face({

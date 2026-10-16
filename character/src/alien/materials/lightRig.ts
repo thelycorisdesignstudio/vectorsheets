@@ -31,7 +31,7 @@ uniform float uSpec;
 uniform float uAOStrength;
 
 // Stylised lighting: returns the lit colour for an albedo.
-vec3 rigLight(vec3 albedo, vec3 N, vec3 V, vec3 shadowMul, float ao, float shade) {
+vec3 rigLight(vec3 albedo, vec3 N, vec3 V, vec3 shadowMul, float ao, float shade, float specScale) {
   float key = smoothstep(-0.55, 0.95, dot(N, uKeyDir));
   float fill = max(dot(N, uFillDir), 0.0);
   float sky = 0.5 + 0.5 * N.y;
@@ -48,7 +48,7 @@ vec3 rigLight(vec3 albedo, vec3 N, vec3 V, vec3 shadowMul, float ao, float shade
   col += uRimTint * rim * 0.28 * shade;
   // Broad satin highlight: soft, low, never glossy.
   vec3 H = normalize(uKeyDir + V);
-  float spec = pow(max(dot(N, H), 0.0), 18.0) * uSpec * occl;
+  float spec = pow(max(dot(N, H), 0.0), 18.0) * uSpec * occl * specScale;
   col += vec3(spec) * 0.16 * shade;
   // Gentle shoulder so highlights never clip harshly.
   col -= max(col - 0.92, 0.0) * 0.55;

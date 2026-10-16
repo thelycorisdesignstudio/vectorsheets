@@ -1,143 +1,149 @@
-# Oru — an embodied 3D companion character
+# Oru — embodied character platform
 
-A real-time, procedurally sculpted 3D alien character built with React,
-TypeScript, Three.js and React Three Fiber. Oru breathes, blinks, glances
-around, follows the cursor, reacts to taps, talks, and moves between nine
-animation states without ever snapping.
+An original, real-time 3D companion character with a body that communicates
+what the AI is doing: it listens, thinks, prepares, speaks, reacts, waits,
+greets and says goodbye, using gaze, expression, posture and timing.
 
 ```bash
 cd character
 npm install
-npm run dev        # http://127.0.0.1:5180
-npm run build      # type-check + production build into character/dist
+npm run dev      # http://127.0.0.1:5180   (studio: add ?dev, or press "d")
+npm test         # unit tests (vitest)
+npm run build    # type-check + production build
 ```
 
-Useful URL parameters for reviews and screenshots: `?present` (clean
-presentation mode), `?view=front|three-quarter|side|back|close`,
-`?palette=grape|tangerine|mint|bubblegum|lagoon`, `?crown=fronds|buds|antennae|ears|sprout`,
-`?head=puck|pebble|bun`, `?eyes=oval|round|almond|droplet`,
-`?brows=pill|arched|tuft|dots|none`, `?ears=none|nubs|fins`,
-`?acc=collar,spectacles,bloom`, `?expr=happy`, `?still` (no greeting, no tracking).
+To use a real conversation model, run the main Vectorsheets server
+(`npm run server:dev` at the repo root, port 8080) with `OPENAI_API_KEY` or the
+Azure OpenAI variables set. The dev server proxies `/api` to it. Without
+credentials the character runs a clearly labelled scripted demo.
 
-## 1. Reference study (tolans.com)
+## What is implemented
 
-What makes those characters work, and what this project adopts as a *style*
-(not their characters, colours or assets):
+| Area | Status |
+| --- | --- |
+| 3D character (sculpted SDF body, skinned rig, per-lobe crown bones) | Implemented |
+| Stylised key / fill / rim lighting, satin highlight, baked AO, contact shadows | Implemented |
+| Expressive face: shader eyes with lids, crescents, slants and squash; bendable brows; parametric mouth with teeth and tongue; jaw and cheek deformation | Implemented |
+| 15 expressions, 8 behaviours, 8 reactions, micro-expressions, hover response | Implemented |
+| Animation controller with 10 explicit states and layered blending | Implemented, unit tested |
+| Gaze: eye contact with the real camera, saccades, aversion, pointer interest, vergence | Implemented |
+| Lip-sync: viseme timelines, word-boundary re-anchoring, amplitude, text estimate | Implemented, unit tested |
+| Embodiment controller (semantic events → behaviour) | Implemented, unit tested |
+| Conversation manager, interruption, cancellation, captions | Implemented, unit tested |
+| Scripted demo backend (no credentials) | Implemented, tested in browser |
+| Server model backend (`/api/companion/*`, OpenAI / Azure OpenAI Responses) | Implemented; tested against a local fake of the Responses API, **not** against a real model |
+| Browser TTS (Web Speech) with word-boundary lip-sync | Implemented; needs a browser with voices (not testable headless) |
+| Browser speech recognition (Web Speech) + mic barge-in | Implemented; needs microphone permission and a supporting browser (Chrome / Edge / Safari) — not tested automatically |
+| Provider audio + exact viseme timing (e.g. Azure visemes) | Interface + playback implemented; no TTS provider is wired on the server yet |
+| Studio (dev controls) and diagnostics | Implemented |
+| GLB import (`GLBAlienCharacter`, bone / shape-key contract) | Implemented; no sculpted GLB exists yet to test it with |
 
-| Quality | Observation | How Oru applies it |
-| --- | --- | --- |
-| Silhouette | Oversized soft head on a small, blobby body; rubber-hose limbs; a crown of chunky rounded lobes | Same proportions system, our own crowns (fronds, buds, antennae, ears, sprout) and head shapes (puck, pebble, bun) |
-| Head form | A thick, rounded "puck": flat friendly face plane, soft thick edges | SDF rounded-cylinder head with a gently domed face and rounder back |
-| Colour | One saturated body hue, gentle vertical gradient, tips fading into a second hue, a contrasting collar | Five original palettes, tinted (never grey) shadows, tip gradients, collar gradient |
-| Shading | Matte painted-vinyl look: very soft terminator, no gloss, crisp silhouette | Custom toon shader: wrapped light, tinted shadow multiplier, baked AO, deepened edges |
-| Face | Flat white oval eyes with big charcoal pupils, pill brows in a deeper body tone, flat blush ovals, decal mouth with teeth & tongue | One-shader eyes with real lids, swept-tube brows, crisp signed-field blush, per-frame mouth geometry |
-| Personality | Warm, slightly cheeky, expressive through small coordinated changes | Restrained expression presets; lids + brows + mouth + head move together |
-| Staging | Warm cream backdrop, soft pinkish ground shadow, lots of air around the character | Minimal cream stage, blob shadow, three-quarter default camera |
-
-## 2. Character concept
-
-**Oru** is a small, curious being from somewhere else: a big soft puck of a
-head, a crown that wobbles when it moves, and paddle hands it waves with its
-whole body. It is friendly, observant and a little cheeky — it looks you in
-the eye while listening, glances up and away while thinking, and giggles
-when poked.
-
-Proportions: head ≈ 45% of body height and ~1.6× the body width; the crown
-adds ~25%. Limbs are short, soft and tapered so every pose stays readable.
-
-## 3. Architecture
+## Architecture
 
 ```
-src/alien/
-  AlienCharacter.tsx     React component (public API)
-  GLBAlienCharacter.tsx  Same brain driving an imported, sculpted GLB
-  types.ts               Typed vocabulary (states, expressions, variants, palette)
-  config/                palettes · expressions · animation states & styles
-  geometry/
-    sdf.ts               distance primitives + smooth blending
-    anatomy.ts           the species as a signed distance field (+ landmarks)
-    surfaceNets.ts       isosurface extraction with Newton projection
-    bodyMesh.ts          skin weights, colour masks and AO baked from the SDF
-    mesh.worker.ts       builds meshes off the main thread (cached per variant)
-  materials/             toon skin, single-shader eye, mouth decal
-  animation/
-    brain.ts             state machine + layered procedural behaviour
-    keyframes.ts/clips.ts additive Catmull-Rom keyframe clips (greeting, happy…)
-    springs.ts           critically damped springs, jiggle oscillators
-    blink.ts gaze.ts talk.ts
-  rig/
-    AlienRig.ts          skinned body, face, antennae, colliders; consumes Pose
-    GLBRig.ts            bone / shape-key adapter for imported models
-    features.ts accessories.ts
+src/
+  alien/                         CharacterRenderer + CharacterRig
+    AlienCharacter.tsx           R3F component: renders, collects camera/pointer input
+    rig/AlienRig.ts              skinned body, eyes, brows, mouth, crown, colliders
+    geometry/                    SDF anatomy → Surface Nets mesh (Web Worker) + baked weights/masks/AO
+    materials/                   toon skin, single-shader eye, mouth decal, shared light rig
+    animation/
+      AnimationController.ts     AnimationController: states, layers, priorities, blending
+      expression.ts              ExpressionController: expressions, behaviours, reactions, variation
+      gaze.ts                    GazeController: fixations, saccades, policies
+      speech/                    SpeechAnimationController + visemes + text timing
+  embodiment/
+    events.ts                    semantic event types
+    EmbodimentController.ts      events → state / behaviour / reaction decisions
+    profile.ts                   CharacterConfiguration (identity, persona, appearance, behaviour)
+  conversation/
+    types.ts                     provider-independent interfaces
+    ConversationManager.ts       turn-taking, provider calls, speech, interruption
+    adapters/                    ScriptedAdapter, HttpChatAdapter
+    voice/                       WebSpeechSynthesizer, WebSpeechRecognizer, SimulatedSpeech, AudioClipSpeech
+  audio/AudioController.ts       playback (Web Audio + analyser), mic capture + VAD
+  platform/createPlatform.ts     wires everything once (no React)
+  ui/                            ConversationDock, StudioPanel, Diagnostics
+server/services/companion.js     (repo root) model call with bounded behaviour/reaction output
 ```
 
-The **brain** is renderer-agnostic: every frame it produces a `Pose`
-(face parameters, gaze, blink, body channels). `AlienRig` renders the
-procedural model; `GLBRig` drives an imported model with the same pose.
+The renderer knows nothing about AI providers; the conversation layer knows
+nothing about 3D. They meet only through **semantic events**:
 
-### Modelling
+`USER_STARTED_SPEAKING · USER_FINISHED_SPEAKING · USER_TYPING · AI_STARTED_THINKING ·
+AI_RESPONSE_READY · AI_STARTED_SPEAKING · AI_FINISHED_SPEAKING · USER_INTERRUPTED ·
+CHARACTER_GREETING · CONVERSATION_ENDED · USER_TOUCHED · USER_ACTIVITY · SET_BEHAVIOUR · REACT`
 
-The body is one continuous surface sculpted from smooth-blended distance
-fields (no seams at neck, shoulders or crown), extracted once with Surface
-Nets, snapped onto the true surface, and shaded with analytic normals. Skin
-weights come from proximity to each anatomical part (with elbows split by
-projection), so the mesh bends softly. AO and colour zones are baked from the
-same field. Meshes are built in a Web Worker and cached; palette, eyes, brows,
-expression and accessories change without rebuilding anything.
+A model can only request a behaviour or reaction from a fixed, validated
+list (checked on the server and again on the client) — never geometry or code.
 
-### Animation
+## Animation system
 
-* **States:** idle, listening, thinking, speaking, happy, curious, surprised,
-  greeting, sleep. One-shots (happy, surprised, greeting) return to the last
-  persistent state; waking from sleep plays a stretch.
-* **Layers:** expression targets → springs; held state pose → springs;
-  procedural breathing, weight shifts and head drift (fractal noise, never
-  periodic); additive keyframe clips; secondary motion (crown, ear and antenna
-  jiggle driven by the head's real motion).
-* **Eyes:** saccadic gaze toward the pointer / viewer / thinking targets,
-  the head follows partially and slowly, lids follow vertical gaze, irregular
-  blinks with occasional doubles and blinks on big gaze shifts.
-* **Speech:** a procedural syllable/viseme generator, or pass `speechLevel`
-  (0..1, e.g. from a Web Audio analyser) to sync with real audio.
+**States** (each with intent, entry clip, behaviour, exit clip, minimum and
+timed duration — see `config/states.ts`): idle, listening, thinking,
+preparing, speaking, reacting, greeting, waiting, farewell, rest. Requests
+made before a state's minimum duration are deferred, never dropped; one-shot
+states return to the last persistent state.
 
-## 4. Component API
+**Layers** (low → high priority):
 
-```tsx
-import { AlienCharacter } from './alien';
+- Body: idle motion (breathing, weight shifts, fractal-noise drift) → held state
+  and behaviour pose → gesture clips (with override masks, e.g. the greeting
+  owns the waving arm) → speech beats → gaze head-follow → secondary motion
+  (crown lobes, ears, antennae).
+- Face: state expression → behaviour deltas (with controlled variation and
+  mirroring) → reaction overlay → micro-expressions and hover → clip accents →
+  speech (owns the mouth and keeps part of the smile) → blink.
 
-<AlienCharacter
-  animation="idle"            // AnimationState
-  expression="curious"        // optional override
-  palette="grape"             // or a custom Palette object
-  head="puck" crown="fronds" ears="none"
-  eyeShape="oval" browShape="pill"
-  accessories={['collar']}
-  animationStyle="playful"    // gentle | playful | snappy
-  enableBlinking
-  interactive
-  trackPointer
-  speechLevel={null}
-  onAnimationChange={(s) => {}}
-  controllerRef={ref}         // play(), poke(), setSpeechLevel(), getState()
-/>
-```
+Faces use slightly underdamped springs, so expressions land with a small,
+lively overshoot instead of sliding in.
 
-### Importing a sculpted GLB
+**What makes the face read as emotional:**
 
-```tsx
-<GLBAlienCharacter url="/models/my-character.glb" animation="listening" />
-```
+- Eye shape changes: crescents for joy, drooping outer corners for sadness,
+  round and stretched for surprise.
+- Brows bend at each end and arch, rather than rotating as rigid pills.
+- Mouth range: grin, soft smile, wobbly, pout, smirk, frown.
+- Cheeks lift, the jaw drops, blush rises, and pupils dilate with eye contact.
+- The crown stands up and fans out when bright, droops when low, and ripples
+  with delight.
+- Idle micro-expressions: an eyebrow flash on eye contact, a soft smile, a
+  content sigh.
 
-Bones (optional): `root, hips, head, arm_L, arm_R, forearm_L, forearm_R,
-ear_L, ear_R, crown, eye_L, eye_R`. Shape keys (optional): `blink_L, blink_R,
-squint, eyeWide, browUp, browDown, browSad, browAngry, smile, frown,
-mouthOpen, mouthRound, mouthWide, blush`. See `src/alien/rig/GLBRig.ts`.
+## Connecting real AI and voice
 
-## 5. Performance
+- **Model:** set provider env vars for the server (`OPENAI_API_KEY`, or
+  `AZURE_OPENAI_*` as documented in the repo README). `GET /api/companion/status`
+  reports whether it is configured; the UI shows "Live model" or "Demo mode".
+- **Your own backend:** implement `ConversationAdapter.respond()` and pass it to
+  `conversation.setAdapter()`.
+- **Better TTS with exact lip-sync:** return `audio: { data, timeline }` from an
+  adapter; map provider visemes with `AZURE_VISEME_IDS` (or similar). Playback
+  and exact-timeline sync are already handled by `AudioClipSpeech`.
+- **Realtime speech-to-speech APIs:** feed their audio into `AudioController.play`
+  (or `speech.begin({ amplitude })`) and dispatch the same semantic events.
 
-* ~25k–70k triangles depending on the automatically chosen quality tier.
-* Mesh generation runs once per variant in a worker; nothing is recreated per frame.
-* The mouth updates one small dynamic buffer; everything else is uniforms and bone transforms.
-* Only invisible proxy colliders take part in raycasting.
-* Custom shaders need no scene lights, no shadow maps and no environment maps.
-* Responsive camera fitting for portrait screens; graceful fallback without WebGL.
+## Performance and reliability
+
+- One render loop drives the character, embodiment and secondary motion; React
+  updates only on meaningful state changes. Diagnostics poll at 4 Hz.
+- Mesh generation runs once per anatomy variant in a Web Worker and is cached;
+  customisation changes uniforms only.
+- Adaptive pixel ratio (`PerformanceMonitor`); transparent canvas over a CSS
+  backdrop; GPU resources disposed on rebuild.
+- Animation pauses on hidden tabs; speech sync is clock-based, so it realigns
+  when the tab returns. Voices that fail or finish silently fall back to
+  captioned speech.
+- `prefers-reduced-motion` (or the studio toggle) scales idle motion, clips and
+  hops down.
+- Error boundaries isolate UI panels; there's a WebGL fallback screen.
+
+## Tests
+
+`npm test` runs 26 unit tests covering text→viseme timing, lip-sync sources and
+boundary re-anchoring, state deferral and timed transitions, reactions,
+expression blending, embodiment event mapping, interruption, cancellation,
+voice fallback and conversation endings. Browser behaviour (rendering,
+expressions, conversation flow, mobile layout) was checked with headless
+Chromium screenshots; real audio input and output still need a manual check on
+a device.

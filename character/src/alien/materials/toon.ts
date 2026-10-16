@@ -41,6 +41,7 @@ export type ToonMaterial = THREE.ShaderMaterial & {
     uGradient: { value: THREE.Vector2 };
     uShade: { value: number };
     uOpacity: { value: number };
+    uSpecScale: { value: number };
     uJaw: { value: number };
     uCheek: { value: number };
     uBrowInner: { value: number };
@@ -111,6 +112,7 @@ uniform vec3 uShadowMul;
 uniform vec2 uGradient;
 uniform float uShade;
 uniform float uOpacity;
+uniform float uSpecScale;
 varying vec3 vNormalV;
 varying vec3 vRest;
 varying vec3 vViewDir;
@@ -136,7 +138,7 @@ void main() {
   albedo = mix(albedo, uBlush, smoothstep(-blushEdge, blushEdge, vMask.z) * uBlushAmount);
   ao = mix(0.5, 1.0, vAO);
   #endif
-  vec3 col = rigLight(albedo, N, normalize(vViewDir), uShadowMul, ao, uShade);
+  vec3 col = rigLight(albedo, N, normalize(vViewDir), uShadowMul, ao, uShade, uSpecScale);
   gl_FragColor = vec4(col, uOpacity);
   #include <colorspace_fragment>
 }
@@ -162,6 +164,7 @@ export function createToonMaterial(o: ToonOptions = {}): ToonMaterial {
       uGradient: { value: new THREE.Vector2(...(o.gradient ?? [0, 1])) },
       uShade: { value: o.shade ?? 1 },
       uOpacity: { value: 1 },
+      uSpecScale: { value: o.brow ? 0.15 : 1 },
       uJaw: { value: 0 },
       uCheek: { value: 0 },
       uBrowInner: { value: 0 },

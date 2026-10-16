@@ -46,7 +46,7 @@ export function createMouthMaterial(p: Palette) {
         // Teeth: a white band under the upper edge, rounded at its ends.
         float band = 0.2 - 0.06 * s * s;
         float teeth = (1.0 - smoothstep(band - 0.03, band + 0.03, t)) * (1.0 - smoothstep(0.62, 0.7, s));
-        c = mix(c, uTeeth, teeth * uTeethAmount * smoothstep(0.08, 0.25, uOpen));
+        c = mix(c, uTeeth, teeth * smoothstep(0.12, 0.4, uTeethAmount) * smoothstep(0.08, 0.25, uOpen));
         c = mix(uLip, c, openness);
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>

@@ -442,6 +442,7 @@ export class AlienRig {
       e.mat.uniforms.uSclera.value.set(p.sclera);
       e.mat.uniforms.uPupil.value.set(p.pupil);
       e.mat.uniforms.uSkin.value.set(p.base);
+      e.mat.uniforms.uLash.value.set(p.brow);
       shadowMultiplier(p.shadow, p.base, e.mat.uniforms.uShadowMul.value);
     }
     const m = this.mouthMat.uniforms;
@@ -460,7 +461,7 @@ export class AlienRig {
     this.eyeShape = shape;
     const [sx, sy] = EYE_SHAPES[shape].size;
     for (const e of this.eyes) {
-      e.mesh.scale.set(sx, sy, 0.046);
+      e.mesh.scale.set(sx, sy, 0.034);
       e.mat.uniforms.uAspect.value = sy / sx;
     }
   }
@@ -620,6 +621,7 @@ export class AlienRig {
       let upper = lerp(closed, 1.18, clamp(f.lidUpper, 0, 1.3)) - pitch * 0.25 * clamp(f.lidUpper, 0, 1);
       upper = lerp(upper, closed, blink);
       u.uLids.value.set(Math.max(upper, closed), lower, curveU, curveL);
+      u.uClosed.value = clamp(1 - (upper - closed) / 0.35, 0, 1);
       // Lid slant: sad droops the outer corners, determined drops the inner ones.
       u.uLidTilt.value = preset.lidTilt + clamp(f.lidTilt, -1.2, 1.2) * 0.42;
       // Each eye converges slightly toward near targets (independent pupils).
@@ -653,7 +655,7 @@ export class AlienRig {
     const open = clamp(f.mouthOpen, 0, 1.1);
     const round = clamp(f.mouthRound, 0, 1);
     const smile = clamp(f.smile, -1, 1.4);
-    const W = 0.112 * clamp(f.mouthWidth, 0.4, 1.6) * (1 - 0.4 * round) * (1 + 0.15 * open);
+    const W = 0.14 * clamp(f.mouthWidth, 0.4, 1.6) * (1 - 0.22 * round) * (1 + 0.15 * open);
     const minT = 0.024;
     const out = this.patchScratch;
     for (let i = 0; i < MOUTH_COLS; i++) {
@@ -662,12 +664,12 @@ export class AlienRig {
       const x = s * W;
       // Upper edge: smile lifts the corners; an open smile flattens the top (D shape).
       const wave = clamp(f.mouthWave, 0, 1) * 0.011 * Math.sin(s * Math.PI * 1.5) * (1 - open * 0.6);
-      const upper = smile * 0.036 * s2 * (1 - 0.5 * open) - smile * 0.007 + f.mouthAsym * 0.024 * s + open * 0.01 + wave;
+      const upper = smile * 0.045 * s2 * (1 - 0.5 * open) - smile * 0.009 + f.mouthAsym * 0.024 * s + open * 0.01 + wave;
       const flat = Math.pow(Math.max(0, 1 - s2), 0.55);
       const ell = Math.sqrt(Math.max(0, 1 - s2));
       const closedProfile = Math.pow(Math.max(0, 1 - s2), 0.35);
       const profile = lerp(lerp(closedProfile, flat, smoothstep(0, 0.2, open)), ell, round);
-      const depth = open * 0.12 * (1 + 0.3 * round) * (1 + 0.3 * Math.max(0, smile));
+      const depth = open * 0.15 * (1 + 0.3 * round) * (1 + 0.3 * Math.max(0, smile));
       const thick = (minT + depth) * profile;
       const lower = upper - thick;
       for (let j = 0; j < MOUTH_ROWS; j++) {
@@ -681,7 +683,7 @@ export class AlienRig {
     }
     pos.needsUpdate = true;
     this.mouthMat.uniforms.uOpen.value = open;
-    this.mouthMat.uniforms.uTeethAmount.value = clamp(f.teeth, 0, 1);
+    this.mouthMat.uniforms.uTeethAmount.value = clamp(f.teeth, 0, 1) * (1 - round * 0.85);
     this.mouthMat.uniforms.uTongueUp.value = clamp(f.tongue, 0, 1);
   }
 

@@ -161,6 +161,7 @@ export function AlienCharacter({
   const input = useMemo(() => ({
     camera: { yaw: 0, pitch: 0, valid: false },
     pointer: { yaw: 0, pitch: 0, active: false, speed: 0 },
+    hover: false,
   }), []);
 
   useFrame((_, dt) => {
@@ -194,6 +195,13 @@ export function AlienCharacter({
     rig.update(pose, Math.min(dt, 1 / 20));
   });
 
+  if (import.meta.env.DEV && rig) {
+    // Dev/test hook: advance the simulation deterministically (used by visual tests).
+    (window as unknown as { __oruSettle: (s: number) => void }).__oruSettle = (seconds: number) => {
+      for (let t = 0; t < seconds; t += 1 / 60) rig.update(controller.update(1 / 60, input), 1 / 60);
+    };
+  }
+
   if (!rig) return null;
 
   const onDown = (e: ThreeEvent<PointerEvent>) => {
@@ -213,8 +221,14 @@ export function AlienCharacter({
       rotation={rotation}
       scale={scale}
       onPointerDown={onDown}
-      onPointerOver={() => interactive && (document.body.style.cursor = 'pointer')}
-      onPointerOut={() => (document.body.style.cursor = '')}
+      onPointerOver={() => {
+        input.hover = true;
+        if (interactive) document.body.style.cursor = 'pointer';
+      }}
+      onPointerOut={() => {
+        input.hover = false;
+        document.body.style.cursor = '';
+      }}
     />
   );
 }

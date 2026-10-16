@@ -186,9 +186,11 @@ export class ConversationManager {
     const handle = synth.speak(reply.text, { rate: voice.rate, pitch: voice.pitch, voiceNames: voice.preferredVoices, audio: reply.audio });
     this.handle = handle;
     let started = false;
+    let startedAt = 0;
     handle.onStart(() => {
       if (id !== this.turnId) return;
       started = true;
+      startedAt = performance.now();
       embodiment.dispatch({ type: 'AI_STARTED_SPEAKING', behaviour: reply.behaviour });
       anim.speech.begin({ timeline: handle.timeline, exactTiming: handle.exactTiming, clock: () => handle.clock(), amplitude: handle.amplitude ? () => handle.amplitude!() : undefined });
       if (this.voiceActive && this.bargeIn) void this.armBargeIn(id);
@@ -197,9 +199,14 @@ export class ConversationManager {
     handle.onBoundary((i) => id === this.turnId && anim.speech.boundary(i));
     const result = await handle.done;
     if (id !== this.turnId) return;
-    if (result === 'error' && !started && synth !== this.fallbackVoice) {
+    const expected = handle.timeline?.duration ?? 0;
+    const elapsed = (performance.now() - startedAt) / 1000;
+    // Some engines "finish" instantly without producing audio; treat that as unavailable too.
+    const silentFinish = result === 'ended' && started && expected > 1 && elapsed < expected * 0.25;
+    if (((result === 'error' && !started) || silentFinish) && synth !== this.fallbackVoice) {
       // Voice unavailable (no voices, autoplay policy…): keep the character speaking with captions.
       this.notice = 'Voice output was unavailable, so the reply is shown as captions.';
+      anim.speech.end();
       return this.speak(reply, id, this.fallbackVoice);
     }
     this.handle = null;

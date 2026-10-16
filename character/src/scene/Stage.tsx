@@ -8,8 +8,9 @@ export type CameraView = 'three-quarter' | 'front' | 'side' | 'back' | 'close';
 
 type Vec = [number, number, number];
 export const VIEWS: Record<CameraView, { position: Vec; target: Vec }> = {
-  'three-quarter': { position: [2.3, 1.75, 5.4], target: [0, 1.18, 0] },
-  front: { position: [0, 1.4, 6], target: [0, 1.18, 0] },
+  // Targets sit a little low so the character floats above the conversation dock.
+  'three-quarter': { position: [2.3, 1.6, 5.9], target: [0, 0.98, 0] },
+  front: { position: [0, 1.3, 6.4], target: [0, 1.0, 0] },
   side: { position: [6, 1.45, 0.2], target: [0, 1.18, 0] },
   back: { position: [-1.6, 1.6, -5.8], target: [0, 1.18, 0] },
   close: { position: [0.95, 1.95, 3.9], target: [0, 1.62, 0] },
