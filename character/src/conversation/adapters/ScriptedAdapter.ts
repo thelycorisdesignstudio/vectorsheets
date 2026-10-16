@@ -18,7 +18,7 @@ const RULES: Rule[] = [
     replies: ['I am Oru, a small companion character. I am an AI, so I live in this little screen and love a good chat.'] },
   { test: /\bhow are you\b/i, behaviour: 'calm',
     replies: ['I do not have feelings the way you do, but I am ready and happy to listen. How are you doing?'] },
-  { test: /\b(sad|tired|stressed|anxious|bad day|lonely)\b/i, behaviour: 'reassuring', reaction: 'empathy',
+  { test: /\b(sad|tired|stressed|anxious|exhausted|overwhelmed|bad day|long day|rough day|lonely)\b/i, behaviour: 'reassuring', reaction: 'empathy',
     replies: ['That sounds hard. I am here with you. Do you want to tell me a little more about it?', 'I am sorry it has been a rough one. What would help most right now?'] },
   { test: /\b(happy|great|awesome|excited|good news)\b/i, behaviour: 'excited', reaction: 'delight',
     replies: ['Oh, that is wonderful! Tell me everything.', 'Yay! That made my crown wiggle. What happened?'] },

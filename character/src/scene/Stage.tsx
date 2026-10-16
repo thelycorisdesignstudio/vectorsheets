@@ -20,6 +20,8 @@ interface StageProps {
   children: ReactNode;
   view: CameraView;
   orbit: boolean;
+  /** 0 = full body, 1 = conversational close-up */
+  focus?: number;
 }
 
 /** Distance multiplier so the whole character fits narrow (portrait) screens. */
@@ -29,26 +31,43 @@ function fitScale(aspect: number) {
   return Math.max(1, needed / 5.9);
 }
 
-/** Moves the camera smoothly toward the selected preset view. */
-function CameraRig({ view, controls }: { view: CameraView; controls: React.RefObject<OrbitControlsImpl | null> }) {
+/**
+ * Moves the camera smoothly toward the selected preset view. `focus` (0..1)
+ * leans the shot in toward the face during conversation — slowly, like a
+ * camera operator — and back out when it ends. Manual orbiting takes over
+ * until the next view or focus change.
+ */
+function CameraRig({ view, focus, controls }: { view: CameraView; focus: number; controls: React.RefObject<OrbitControlsImpl | null> }) {
   const { camera, size } = useThree();
   const goal = useRef(new THREE.Vector3());
   const target = useRef(new THREE.Vector3());
   const animating = useRef(true);
+  const fast = useRef(true);
   const aspect = size.width / Math.max(1, size.height);
   useEffect(() => {
-    target.current.set(...VIEWS[view].target);
+    fast.current = true;
+  }, [view]);
+  useEffect(() => {
+    const v = VIEWS[view];
     const k = view === 'close' ? Math.min(fitScale(aspect), 1.25) : fitScale(aspect);
-    goal.current.set(...VIEWS[view].position).sub(target.current).multiplyScalar(k).add(target.current);
+    const f = view === 'close' ? 0 : focus;
+    // Conversation framing: closer, aimed at the face.
+    target.current.set(v.target[0], v.target[1] + (1.28 - v.target[1]) * f, v.target[2]);
+    const dist = k * (1 - 0.24 * f);
+    goal.current.set(...v.position).sub(new THREE.Vector3(...v.target)).multiplyScalar(dist).add(target.current);
     animating.current = true;
-  }, [view, aspect]);
+  }, [view, aspect, focus]);
   useFrame((_, dt) => {
     if (!animating.current) return;
-    const k = 1 - Math.exp(-dt * 4);
+    // Preset changes move briskly; conversational lean-ins drift in gently.
+    const k = 1 - Math.exp(-dt * (fast.current ? 4 : 0.9));
     camera.position.lerp(goal.current, k);
     controls.current?.target.lerp(target.current, k);
     controls.current?.update();
-    if (camera.position.distanceTo(goal.current) < 0.005 && (controls.current?.target.distanceTo(target.current) ?? 0) < 0.005) animating.current = false;
+    if (camera.position.distanceTo(goal.current) < 0.005 && (controls.current?.target.distanceTo(target.current) ?? 0) < 0.005) {
+      animating.current = false;
+      fast.current = false;
+    }
   });
   useEffect(() => {
     const c = controls.current;
@@ -66,7 +85,7 @@ function CameraRig({ view, controls }: { view: CameraView; controls: React.RefOb
  * Lighting and the ground shadow belong to the character itself (stylised
  * shaders + blob shadow), so the stage stays clean and fast.
  */
-export function Stage({ children, view, orbit }: StageProps) {
+export function Stage({ children, view, orbit, focus = 0 }: StageProps) {
   const controls = useRef<OrbitControlsImpl | null>(null);
   // Start at the device ratio (capped at 2) and step down if frames drop.
   const maxDpr = Math.min(2, window.devicePixelRatio || 1);
@@ -93,7 +112,7 @@ export function Stage({ children, view, orbit }: StageProps) {
         minPolarAngle={0.35}
         maxPolarAngle={Math.PI / 2 - 0.02}
       />
-      <CameraRig view={view} controls={controls} />
+      <CameraRig view={view} focus={focus} controls={controls} />
     </Canvas>
   );
 }
