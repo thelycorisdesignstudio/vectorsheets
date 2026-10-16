@@ -1,0 +1,14 @@
+export { AlienCharacter, type AlienCharacterProps } from './AlienCharacter';
+export { AnimationController, type Pose, type ControllerSettings, type ControllerSnapshot, type FrameInput } from './animation/AnimationController';
+export { BEHAVIOURS, REACTIONS, ExpressionController } from './animation/expression';
+export { SpeechAnimationController, type SpeechSessionInput, type SpeechSyncSource } from './animation/speech/SpeechAnimationController';
+export { textToTimeline, wordToVisemes } from './animation/speech/textToVisemes';
+export * from './animation/speech/visemes';
+export { AlienRig } from './rig/AlienRig';
+export { PALETTES, resolvePalette } from './config/palettes';
+export { EXPRESSIONS, EXPRESSION_LABELS } from './config/expressions';
+export { STATES, STATE_ORDER, ANIMATION_STYLES } from './config/states';
+export { EYE_SHAPES, BROW_LABELS } from './rig/features';
+export * from './types';
+export { GLBAlienCharacter, type GLBAlienCharacterProps } from './GLBAlienCharacter';
+export { GLBRig } from './rig/GLBRig';
