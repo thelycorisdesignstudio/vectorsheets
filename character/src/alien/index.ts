@@ -1,0 +1,10 @@
+export { AlienCharacter, type AlienCharacterProps } from './AlienCharacter';
+export { AlienBrain, type Pose } from './animation/brain';
+export { AlienRig } from './rig/AlienRig';
+export { PALETTES, resolvePalette } from './config/palettes';
+export { EXPRESSIONS, EXPRESSION_LABELS } from './config/expressions';
+export { STATES, STATE_ORDER, ANIMATION_STYLES } from './config/states';
+export { EYE_SHAPES, BROW_LABELS } from './rig/features';
+export * from './types';
+export { GLBAlienCharacter, type GLBAlienCharacterProps } from './GLBAlienCharacter';
+export { GLBRig } from './rig/GLBRig';

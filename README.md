@@ -4,6 +4,10 @@ Vectorsheets is a MERN spreadsheet agent for generating, editing, analyzing, val
 
 The product is designed to feel familiar to Excel users: a clean workbook list, formula bar, grid, charting surface, data tools, validation, summary builder, local versioning, notes, and export flows. Cloud AI generation is supported server-side, and the app keeps working through a deterministic local workbook engine when cloud credentials are missing or rejected.
 
+## Oru character prototype
+
+An embodied 3D companion character lives in [`character/`](character/README.md) as its own React + TypeScript + React Three Fiber app (`cd character && npm install && npm run dev`).
+
 ## Current Status
 
 - Local production host: `http://127.0.0.1:8080`
