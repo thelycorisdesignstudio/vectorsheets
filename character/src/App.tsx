@@ -60,6 +60,8 @@ export default function App() {
     return {
       kind: a.kind,
       figure: a.figure,
+      hair: (q.get('hair') as Appearance['hair']) || a.hair,
+      outfit: (q.get('outfit') as Appearance['outfit']) || a.outfit,
       palette: (q.get('palette') as Appearance['palette']) || a.palette,
       eyeShape: (q.get('eyes') as Appearance['eyeShape']) || a.eyeShape,
       browShape: (q.get('brows') as Appearance['browShape']) || a.browShape,

@@ -1,4 +1,4 @@
-import type { CrownFeature, EarStyle, HeadShape } from '../types';
+import type { CrownFeature, EarStyle, HairStyle, HeadShape, Outfit } from '../types';
 import {
   type Leaf, type V3, add, cross, makeLeaf, normalize, sdEllipsoid, sdLeaf, sdRoundCone, smin,
 } from './sdf';
@@ -30,6 +30,8 @@ export interface AnatomySpec {
   kind?: 'alien' | 'human';
   /** human figure */
   figure?: 'lady' | 'man' | 'noor';
+  hair?: HairStyle;
+  outfit?: Outfit;
 }
 
 /** A bangle worn on a forearm: arm index, position along elbow→hand (0..1), colour, tube radius. */
@@ -131,6 +133,8 @@ export class Anatomy {
   restPose: RestPose = { armLx: 0, armLz: 0, elbowLx: 0, elbowL: 0, armRx: 0, armRz: 0, elbowRx: 0, elbowR: 0 };
   /** strength of painted cheek blush (1 = full) */
   blushStrength = 1;
+  /** how far arm gestures swing (long human arms hang closer and need more lift) */
+  armSwing = 1;
   bangles: Bangle[] = [];
   ears: Leaf[] = [];
   eyes: EyeLandmark[] = [];

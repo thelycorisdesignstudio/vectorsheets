@@ -490,10 +490,13 @@ export class AlienRig {
     u.uBlush.value.set(p.blush);
     shadowMultiplier(p.shadow, p.base, u.uShadowMul.value);
     if (p.regions) {
+      // Clothing colours follow the outfit being worn (casual uses the base regions).
+      const o = this.anatomy.spec.outfit;
+      const wear = (o && o !== 'casual' && !(o === 'dress' && this.anatomy.spec.figure === 'man') && p.outfits?.[o]) || p.regions;
       u.uHair.value.set(p.regions.hair);
-      u.uShirt.value.set(p.regions.shirt);
-      u.uPants.value.set(p.regions.pants);
-      u.uShoes.value.set(p.regions.shoes);
+      u.uShirt.value.set(wear.shirt);
+      u.uPants.value.set(wear.pants);
+      u.uShoes.value.set(wear.shoes);
     }
     for (const b of this.brows) {
       const bu = b.mat.uniforms;
@@ -632,8 +635,9 @@ export class AlienRig {
     this.head.rotation.set(b.headRx + lagX, b.headRy, b.headRz + hj * 0.3 + lagZ + (this.anatomy.restPose.headRz ?? 0));
     // Animation layers on top of the character's resting stance.
     const r = this.anatomy.restPose;
-    this.armL.rotation.set(b.armLx + r.armLx, r.armLy ?? 0, b.armLz + r.armLz);
-    this.armR.rotation.set(b.armRx + r.armRx, r.armRy ?? 0, b.armRz + r.armRz);
+    const sw = this.anatomy.armSwing;
+    this.armL.rotation.set(b.armLx + r.armLx, r.armLy ?? 0, b.armLz * sw + r.armLz);
+    this.armR.rotation.set(b.armRx + r.armRx, r.armRy ?? 0, b.armRz * sw + r.armRz);
     this.foreL.rotation.set(b.elbowLx + r.elbowLx, r.elbowLy ?? 0, b.elbowL + r.elbowL);
     this.foreR.rotation.set(b.elbowRx + r.elbowRx, r.elbowRy ?? 0, b.elbowR + r.elbowR);
     this.handL.rotation.set(0, r.handLy ?? 0, 0);

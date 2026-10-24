@@ -112,6 +112,10 @@ export const PALETTES: Record<PaletteName, Palette> = {
     collarB: '#e9b84e',
     glow: '#ffffff',
     regions: { hair: '#f2603f', shirt: '#dcd7cf', pants: '#21415f', shoes: '#3b2723' },
+    outfits: {
+      workout: { shirt: '#a796dd', pants: '#2c2f45', shoes: '#f4f1ea' },
+      dress: { shirt: '#86ad92', pants: '#86ad92', shoes: '#c4935f' },
+    },
   },
   theo: {
     label: 'Theo',
@@ -133,6 +137,9 @@ export const PALETTES: Record<PaletteName, Palette> = {
     collarB: '#6f9a7c',
     glow: '#ffffff',
     regions: { hair: '#2b1d16', shirt: '#5f957a', pants: '#d8c7a4', shoes: '#f2efe8' },
+    outfits: {
+      workout: { shirt: '#ef7d45', pants: '#2b2f3a', shoes: '#f3f1ec' },
+    },
   },
   noor: {
     label: 'Noor',
@@ -154,6 +161,10 @@ export const PALETTES: Record<PaletteName, Palette> = {
     collarB: '#c88d26',
     glow: '#ffffff',
     regions: { hair: '#1f1612', shirt: '#e3a83f', pants: '#5f6d3d', shoes: '#efe9e0' },
+    outfits: {
+      workout: { shirt: '#4fb3a0', pants: '#2b2b3a', shoes: '#ffffff' },
+      dress: { shirt: '#c8573d', pants: '#c8573d', shoes: '#8a5a3b' },
+    },
   },
   lagoon: {
     label: 'Sky Lagoon',

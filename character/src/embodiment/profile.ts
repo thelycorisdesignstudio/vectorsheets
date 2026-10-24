@@ -1,6 +1,6 @@
 import type { GazeProfile } from '../alien/animation/gaze';
 import type {
-  Accessory, AnimationStyle, Behaviour, BrowShape, CharacterKind, CrownFeature, EarStyle, ExpressionName, EyeShape, HeadShape, HumanFigure, PaletteName,
+  Accessory, AnimationStyle, Behaviour, BrowShape, CharacterKind, CrownFeature, EarStyle, ExpressionName, EyeShape, HairStyle, HeadShape, HumanFigure, Outfit, PaletteName,
 } from '../alien/types';
 
 /**
@@ -22,6 +22,8 @@ export interface CharacterProfile {
   appearance: {
     kind?: CharacterKind;
     figure?: HumanFigure;
+    hair?: HairStyle;
+    outfit?: Outfit;
     palette: PaletteName;
     head: HeadShape;
     crown: CrownFeature;
@@ -100,7 +102,7 @@ export const MIRA_PROFILE: CharacterProfile = {
     voice: { rate: 1.03, pitch: 1.1, preferredVoices: ['Samantha', 'Google UK English Female', 'Microsoft Aria', 'Karen'] },
   },
   appearance: {
-    kind: 'human', figure: 'lady', palette: 'mira', head: 'puck', crown: 'fronds', ears: 'none',
+    kind: 'human', figure: 'lady', hair: 'bob', outfit: 'casual', palette: 'mira', head: 'puck', crown: 'fronds', ears: 'none',
     eyeShape: 'almond', browShape: 'arched', accessories: [],
   },
   behaviour: {
@@ -124,7 +126,7 @@ export const THEO_PROFILE: CharacterProfile = {
     voice: { rate: 1, pitch: 0.92, preferredVoices: ['Daniel', 'Google UK English Male', 'Microsoft Guy', 'Alex'] },
   },
   appearance: {
-    kind: 'human', figure: 'man', palette: 'theo', head: 'puck', crown: 'fronds', ears: 'none',
+    kind: 'human', figure: 'man', hair: 'crop', outfit: 'casual', palette: 'theo', head: 'puck', crown: 'fronds', ears: 'none',
     eyeShape: 'oval', browShape: 'pill', accessories: [],
   },
   behaviour: {
@@ -177,7 +179,7 @@ export const NOOR_PROFILE: CharacterProfile = {
     voice: { rate: 1.05, pitch: 1.05, preferredVoices: ['Google UK English Female', 'Samantha', 'Microsoft Jenny', 'Karen'] },
   },
   appearance: {
-    kind: 'human', figure: 'noor', palette: 'noor', head: 'puck', crown: 'fronds', ears: 'none',
+    kind: 'human', figure: 'noor', hair: 'puff', outfit: 'casual', palette: 'noor', head: 'puck', crown: 'fronds', ears: 'none',
     eyeShape: 'oval', browShape: 'arched', accessories: [],
   },
   behaviour: {

@@ -1,5 +1,6 @@
 import { Anatomy, type AnatomySpec, type Bangle, type FaceLayout, type HeadDef, PART, type RestPose } from './anatomy';
 import { type V3, makeLeaf, sdEllipsoid, sdRoundCone, smax, smin, sstep } from './sdf';
+import type { HairStyle, Outfit } from '../types';
 
 /**
  * Stylised human figures in the same soft, clay-like language as Oru:
@@ -38,6 +39,36 @@ interface FigureDef {
   /** depth of trouser folds */
   folds: number;
   blush: number;
+  /** bare legs under shorts, leggings and skirts */
+  legs: { x: number; thighR: number; kneeY: number; kneeR: number; ankleR: number; calfR: number };
+}
+
+interface Tube { top: V3; bottom: V3; r1: number; r2: number }
+
+/** What a figure wears: clothing volumes and where each colour region starts and ends. */
+interface OutfitDef {
+  sleeve: { a: V3; b: V3; r1: number; r2: number } | null;
+  /** loose trouser legs (hide the legs) */
+  trousers: Tube | null;
+  shorts: Tube | null;
+  /** one cone around both legs (x of top and bottom is 0) */
+  skirt: Tube | null;
+  bareLegs: boolean;
+  /** thickness of tight leggings over the legs */
+  leggings: number;
+  /** torso width factor: fitted tops are slimmer than a boxy tee */
+  fit: number;
+  shoe: { c: V3; r: V3 };
+  shirtTop: number;
+  /** shoulder straps: [inner x, outer x, top y] */
+  strap: [number, number, number] | null;
+  shirtBottom: number;
+  pantsTop: number;
+  pantsBottom: number;
+  shoeTop: number;
+  folds: number;
+  blouse: boolean;
+  bangles: Bangle[];
 }
 
 const FIGURES: Record<Figure, FigureDef> = {
@@ -66,10 +97,11 @@ const FIGURES: Record<Figure, FigureDef> = {
     handScale: 1.08,
     folds: 0.007,
     blush: 0,
+    legs: { x: 0.13, thighR: 0.125, kneeY: 0.95, kneeR: 0.068, ankleR: 0.045, calfR: 0.074 },
     // Weight on one hip: left hand on the hip, right forearm raised and turned
     // palm-up in an open, presenting gesture, head tipped a little.
     restPose: { armLx: 0.14, armLz: 0.55, elbowLx: 0, elbowL: -1.26, armRx: -0.05, armRz: -0.24, armRy: -0.75, elbowRx: -1.3, elbowR: 0, elbowRy: -0.45, handRy: -1.1, headRz: 0.09 },
-    face: { scale: 0.36, eyeSpread: 0.102, eyeLift: 0.02, browOffset: 0.075, mouthOffset: 0.14, blush: { dx: 0.135, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 1, lidRest: 0.72, pupilBase: 0.2, mouthScale: 0.72 },
+    face: { scale: 0.36, eyeSpread: 0.102, eyeLift: 0.02, browOffset: 0.075, mouthOffset: 0.14, blush: { dx: 0.135, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 1, lidRest: 0.72, pupilBase: 0.2, mouthScale: 0.85 },
     bangles: [
       // A stack of beaded colours on the presenting wrist, one gold bangle on the other.
       { arm: 1, t: 0.8, color: '#3fa7a0', tube: 0.011 },
@@ -101,6 +133,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     handScale: 1.15,
     folds: 0.004,
     blush: 0.15,
+    legs: { x: 0.15, thighR: 0.14, kneeY: 0.95, kneeR: 0.08, ankleR: 0.055, calfR: 0.088 },
     restPose: { armLx: -0.04, armLz: -0.07, elbowLx: -0.24, elbowL: 0.04, armRx: -0.04, armRz: 0.07, elbowRx: -0.24, elbowR: -0.04 },
     face: { scale: 0.36, eyeSpread: 0.106, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.14, blush: { dx: 0.14, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 0, lidRest: 0.9, pupilBase: 0.44 },
     bangles: [],
@@ -129,11 +162,50 @@ const FIGURES: Record<Figure, FigureDef> = {
     handScale: 1.12,
     folds: 0.005,
     blush: 0.25,
+    legs: { x: 0.16, thighR: 0.155, kneeY: 0.95, kneeR: 0.085, ankleR: 0.055, calfR: 0.092 },
     restPose: { armLx: -0.1, armLz: -0.05, elbowLx: -1.05, elbowL: -1.0, armRx: -0.1, armRz: 0.05, elbowRx: -1.05, elbowR: 1.0, headRz: -0.05 },
     face: { scale: 0.38, eyeSpread: 0.108, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.135, blush: { dx: 0.15, dy: -0.06, rx: 0.045, ry: 0.026 }, liner: 1, lidRest: 0.95, pupilBase: 0.3, mouthScale: 0.85 },
     bangles: [],
   },
 };
+
+const DEFAULT_HAIR: Record<Figure, HairStyle> = { lady: 'bob', man: 'crop', noor: 'puff' };
+
+/** Builds the clothing for a figure. The man has no dress; he gets his casual clothes. */
+function outfitFor(fig: Figure, outfit: Outfit, d: FigureDef): OutfitDef {
+  const L = d.legs;
+  const casual: OutfitDef = {
+    sleeve: d.sleeve, trousers: d.leg, shorts: null, skirt: null, bareLegs: false, leggings: 0, fit: 1, shoe: d.shoe,
+    shirtTop: d.neckline, strap: null, shirtBottom: d.waistY, pantsTop: d.waistY, pantsBottom: d.hemY, shoeTop: d.hemY,
+    folds: d.folds, blouse: true, bangles: d.bangles,
+  };
+  if (outfit === 'casual' || (outfit === 'dress' && fig === 'man')) return casual;
+  const sneaker = { c: [L.x * 0.98, 0.075, 0.06] as V3, r: [0.095, 0.08, 0.18] as V3 };
+  const base: OutfitDef = { ...casual, sleeve: null, trousers: null, bareLegs: true, blouse: false, shoe: sneaker, shoeTop: 0.15, folds: 0 };
+  if (outfit === 'workout') {
+    if (fig === 'man') {
+      // Gym: a vest with wide straps, loose shorts to just above the knee, trainers.
+      return {
+        ...base, fit: 0.95, shorts: { top: [L.x, 1.74, 0], bottom: [L.x + 0.015, 1.12, 0.01], r1: 0.185, r2: 0.165 },
+        shirtTop: d.neckline - 0.03, strap: [0.1, 0.25, 2.75], shirtBottom: 1.8, pantsTop: 1.82, pantsBottom: 1.06, folds: 0.004, bangles: [],
+      };
+    }
+    // Studio: a sports top (bare midriff for Mira), high-waisted leggings, trainers and a fitness band.
+    const lady = fig === 'lady';
+    return {
+      ...base, fit: lady ? 0.9 : 0.95, leggings: 0.007,
+      shirtTop: d.neckline - (lady ? 0.06 : 0.03), strap: lady ? [0.09, 0.17, 2.75] : [0.11, 0.22, 2.75],
+      shirtBottom: lady ? 2.15 : 1.98, pantsTop: lady ? 1.98 : 1.9, pantsBottom: lady ? 0.2 : 0.42,
+      bangles: [{ arm: 0, t: 0.9, color: '#2b2c36', tube: 0.017 }],
+    };
+  }
+  // Sundress: fitted strappy bodice, an A-line skirt to the knee, flat sandals.
+  return {
+    ...base, fit: 0.92, skirt: { top: [0, d.waistY + 0.02, 0], bottom: [0, 0.95, 0.02], r1: d.waist.r[0] * 0.86, r2: fig === 'noor' ? 0.42 : 0.37 },
+    shirtTop: d.neckline - 0.05, strap: [0.09, 0.17, 2.75], shirtBottom: 0.93, pantsTop: -1, pantsBottom: -1,
+    shoe: { c: [L.x, 0.04, 0.06], r: [0.072, 0.042, 0.135] }, shoeTop: 0.09, folds: 0.006, bangles: d.bangles,
+  };
+}
 
 /** Model-space height of each figure's head centre (after head scaling), for camera framing. */
 export function humanHeadY(figure: Figure) {
@@ -145,6 +217,8 @@ export function humanHeadY(figure: Figure) {
 export class HumanAnatomy extends Anatomy {
   readonly figure: Figure;
   readonly def: FigureDef;
+  hair!: HairStyle;
+  outfit!: OutfitDef;
 
   constructor(spec: AnatomySpec) {
     super(spec);
@@ -165,15 +239,18 @@ export class HumanAnatomy extends Anatomy {
     };
     this.neck = [0, this.head.c[1] - 0.42, 0];
     this.crownPivot = [0, this.head.c[1] + this.head.ry * 0.6, -0.05];
-    this.bangles = d.bangles;
+    this.hair = spec.hair ?? DEFAULT_HAIR[this.figure];
+    this.outfit = outfitFor(this.figure, spec.outfit ?? 'casual', d);
+    this.bangles = this.outfit.bangles;
     this.restPose = d.restPose;
+    this.armSwing = 1.35;
     this.blushStrength = d.blush;
     const mirror = (p: V3): V3 => [-p[0], p[1], p[2]];
     this.shoulders = [d.arm.shoulder, mirror(d.arm.shoulder)];
     this.elbows = [d.arm.elbow, mirror(d.arm.elbow)];
     this.hands = [d.arm.hand, mirror(d.arm.hand)];
     this.bellyCollider = { c: [0, (d.waistY + d.neckline) / 2, 0.02], r: [0.36, 0.6, 0.26] };
-    this.footX = d.shoe.c[0];
+    this.footX = this.outfit.shoe.c[0];
     this.wobbleRange = [d.neckline + 0.3, this.head.c[1] + 0.7];
     this.setup();
   }
@@ -229,84 +306,149 @@ export class HumanAnatomy extends Anatomy {
     return h;
   }
 
-  /** Hair: a single sculpted volume with the face opening carved out. */
+  /** Hair: one of several sculpted styles, modelled for the lady's head and scaled to fit. */
   private rawHair(x: number, y: number, z: number) {
     const d = this.def;
-    if (!d) return 1e3;
-    const c = d.head.c;
-    if (this.figure === 'lady') {
-      // Straight, chin-length bob: a smooth cap on top falling into straight
-      // sides, parted on one side and swept across the forehead.
-      let h = sdEllipsoid(x, y - (c[1] + 0.09), z + 0.02, 0.295, 0.32, 0.3);
-      h = smin(h, sdRoundCone(x, y, z, 0, c[1] + 0.06, -0.03, 0, c[1] - 0.16, -0.045, 0.305, 0.322), 0.06);
-      // Blunt cut just below the chin, the ends tipping in slightly.
-      h = smax(h, c[1] - 0.25 - y + 0.03 * Math.max(0, z), 0.025);
-      // Face opening; its top drops toward the swept side (+x).
-      const fy = y - (c[1] - 0.05) + 0.12 * Math.max(0, x + 0.04);
-      h = smax(h, -sdEllipsoid(x - 0.005, fy, z - 0.25, 0.212, 0.265, 0.2), 0.03);
-      // Ends flick outward a little.
-      h = smin(h, sdEllipsoid(x, y - (c[1] - 0.215), z + 0.05, 0.338, 0.04, 0.3), 0.04);
-      h = smax(h, c[1] - 0.25 - y, 0.02);
-      h = smax(h, -sdEllipsoid(x - 0.005, fy, z - 0.25, 0.212, 0.265, 0.2), 0.03);
-      // Soft strand clumps running down the length (stronger toward the ends).
-      const ang = Math.atan2(x, z + 0.03);
-      h += 0.0022 * Math.sin(ang * 34 + 0.6 * Math.sin(y * 9)) * sstep(c[1] + 0.25, c[1] - 0.1, y);
-      return h;
-    }
-    if (this.figure === 'noor') {
-      // Curls pulled back from the face into a big high puff.
-      let h = sdEllipsoid(x, y - (c[1] + 0.04), z + 0.025, 0.295, 0.3, 0.295);
-      const fy = y - (c[1] - 0.07);
-      h = smax(h, -sdEllipsoid(x, fy, z - 0.24, 0.235, 0.31, 0.215), 0.03);
-      h = smax(h, c[1] - 0.12 - y - 0.1 * Math.max(0, -z), 0.04);
-      // The puff: a round ball sitting on a short gathered base.
-      h = smin(h, sdEllipsoid(x, y - (c[1] + 0.43), z + 0.09, 0.2, 0.18, 0.19), 0.035);
-      // Curl texture: two interfering octaves of soft bumps.
-      const n1 = Math.sin(x * 58) * Math.sin(y * 58 + 1.3) * Math.sin(z * 58 + 2.1);
-      const n2 = Math.sin(x * 97 + 0.7) * Math.sin(y * 91 + 2.4) * Math.sin(z * 103 + 0.2);
-      return h - 0.009 * n1 - 0.0045 * n2;
-    }
-    // Short crop, sculpted at the old head size (rx 0.45) and scaled to fit.
-    const k = d.head.rx / 0.45;
-    // Lifted a touch so the hairline clears the brows.
-    return this.crop((x - c[0]) / k, c[1] + (y - c[1] - 0.045) / k, (z - c[2]) / k, c) * k;
+    if (!d || !this.hair) return 1e3;
+    const c = d.head.c[1];
+    const k = d.cranium.r[0] / 0.255;
+    // The skull (in hair units) lets caps sit a uniform thickness proud of the real head.
+    const skull = this.rawHead(x, y, z) / k;
+    return this.hairStyle(x / k, c + (y - c) / k, z / k, c, skull) * k;
   }
 
-  private crop(x: number, y: number, z: number, c: V3) {
-    // Short crop: tight at the sides and back, with volume and a quiff on top.
-    let h = sdEllipsoid(x, y - (c[1] + 0.13), z + 0.01, 0.465, 0.42, 0.475);
-    const faceCut = sdEllipsoid(x, y - (c[1] - 0.15), z - 0.32, 0.44, 0.4, 0.34);
-    h = smax(h, -faceCut, 0.05);
-    // Hairline: low at the back, higher at the sides and front (above the ears).
-    const line = c[1] - 0.02 + 0.2 * sstep(-0.2, 0.35, z) + 0.05 * sstep(0.3, 0.42, Math.abs(x));
-    h = smax(h, line - y, 0.04);
-    // Side-parted quiff sweeping up and over.
-    h = smin(h, sdEllipsoid(x - 0.08, y - (c[1] + 0.41), z - 0.2, 0.3, 0.14, 0.22), 0.1);
-    h = smin(h, sdEllipsoid(x + 0.12, y - (c[1] + 0.36), z - 0.27, 0.2, 0.1, 0.14), 0.08);
-    return h;
+  private hairStyle(x: number, y: number, z: number, c: number, skull: number) {
+    // A cap a uniform thickness proud of the head itself (never thin anywhere).
+    const cap = (t: number) => skull - t;
+    // Shared cuts: the face opening and the nape line (higher at the sides than the back).
+    const face = (top = 0.272, k = 0.025) => (h: number) => smax(h, -sdEllipsoid(x, y - (c - 0.05), z - 0.245, 0.222, top, 0.205), k);
+    // The line rises from the nape to clear the ears at the sides, then on to the temples.
+    const nape = (back: number, rise: number) => (h: number) => smax(h, c + back + rise * sstep(-0.24, -0.04, z) + 0.04 * sstep(0.05, 0.2, z) - y, 0.025);
+    switch (this.hair) {
+      case 'bob': {
+        // Straight, chin-length bob: a smooth cap falling into straight sides,
+        // parted on one side and swept across the forehead; the ends flick out.
+        let h = sdEllipsoid(x, y - (c + 0.09), z + 0.02, 0.295, 0.32, 0.3);
+        h = smin(h, sdRoundCone(x, y, z, 0, c + 0.06, -0.03, 0, c - 0.16, -0.045, 0.305, 0.322), 0.06);
+        const fy = y - (c - 0.05) + 0.12 * Math.max(0, x + 0.04);
+        const cut = -sdEllipsoid(x - 0.005, fy, z - 0.25, 0.212, 0.265, 0.2);
+        h = smax(h, cut, 0.03);
+        h = smin(h, sdEllipsoid(x, y - (c - 0.215), z + 0.05, 0.338, 0.04, 0.3), 0.04);
+        h = smax(h, c - 0.25 - y, 0.02);
+        h = smax(h, cut, 0.03);
+        // Soft strand clumps running down the length (stronger toward the ends).
+        const ang = Math.atan2(x, z + 0.03);
+        h += 0.0022 * Math.sin(ang * 34 + 0.6 * Math.sin(y * 9)) * sstep(c + 0.25, c - 0.1, y);
+        return h;
+      }
+      case 'ponytail': {
+        // Sleek, combed back from the face into a high tie, with a full tail.
+        let h = cap(0.018);
+        h = face(0.29)(h);
+        h = nape(-0.2, 0.25)(h);
+        h -= 0.0022 * Math.sin(x * 95 + 0.6 * Math.sin(z * 7));
+        const ty = c + 0.11, tz = -0.275;
+        h = smin(h, sdEllipsoid(x, y - ty, z - tz, 0.056, 0.05, 0.042), 0.025);
+        const p1y = c - 0.03, p1z = -0.39;
+        let tail = Math.min(
+          sdRoundCone(x, y, z, 0, ty - 0.01, tz - 0.03, 0, p1y, p1z, 0.048, 0.074),
+          sdRoundCone(x, y, z, 0, p1y, p1z, 0.025, c - 0.3, -0.37, 0.074, 0.026),
+        );
+        tail -= 0.003 * Math.sin(Math.atan2(x, z + 0.38) * 14 + y * 4);
+        return smin(h, tail, 0.03);
+      }
+      case 'crop': {
+        // Short back and sides, a longer textured top swept up and to one side, sideburns.
+        let h = cap(0.02);
+        h = smin(h, sdEllipsoid(x + 0.02, y - (c + 0.25), z - 0.03, 0.215, 0.1, 0.235), 0.07);
+        h = smin(h, sdEllipsoid(x + 0.05, y - (c + 0.245), z - 0.19, 0.15, 0.075, 0.085), 0.05);
+        h = face(0.27, 0.035)(h);
+        h = nape(-0.2, 0.25)(h);
+        h = Math.min(h, sdEllipsoid(Math.abs(x) - 0.262, y - c, z - 0.1, 0.014, 0.055, 0.025));
+        h -= 0.006 * sstep(c + 0.12, c + 0.3, y) * Math.sin(x * 48 + 0.8 * Math.sin(z * 9));
+        return h;
+      }
+      case 'curls': {
+        // Short tight curls with tidy sides.
+        let h = smin(cap(0.03), sdEllipsoid(x, y - (c + 0.12), z + 0.0, 0.25, 0.25, 0.26), 0.05);
+        h = face(0.27)(h);
+        h = nape(-0.2, 0.25)(h);
+        const n1 = Math.sin(x * 62) * Math.sin(y * 62 + 1.3) * Math.sin(z * 62 + 2.1);
+        const n2 = Math.sin(x * 101 + 0.7) * Math.sin(y * 95 + 2.4) * Math.sin(z * 107 + 0.2);
+        return h - 0.008 * n1 - 0.004 * n2;
+      }
+      case 'buzz': {
+        // Close-cropped all over, following the skull.
+        let h = cap(0.014);
+        h = face(0.27, 0.015)(h);
+        return nape(-0.2, 0.25)(h);
+      }
+      case 'puff':
+      default: {
+        // Curls pulled back from the face into a big high puff.
+        let h = smin(cap(0.03), sdEllipsoid(x, y - (c + 0.06), z + 0.025, 0.28, 0.29, 0.28), 0.04);
+        h = smax(h, -sdEllipsoid(x, y - (c - 0.07), z - 0.24, 0.235, 0.31, 0.215), 0.03);
+        h = smax(h, c - 0.12 - y - 0.1 * Math.max(0, -z), 0.04);
+        h = smin(h, sdEllipsoid(x, y - (c + 0.43), z + 0.09, 0.2, 0.18, 0.19), 0.035);
+        const n1 = Math.sin(x * 58) * Math.sin(y * 58 + 1.3) * Math.sin(z * 58 + 2.1);
+        const n2 = Math.sin(x * 97 + 0.7) * Math.sin(y * 91 + 2.4) * Math.sin(z * 103 + 0.2);
+        return h - 0.009 * n1 - 0.0045 * n2;
+      }
+    }
   }
 
   protected bodyField(x: number, y: number, z: number) {
     const d = this.def ?? FIGURES.lady;
-    const e = (q: { c: V3; r: V3 }) => sdEllipsoid(x - q.c[0], y - q.c[1], z - q.c[2], q.r[0], q.r[1], q.r[2]);
-    let b = e(d.chest);
-    b = smin(b, e(d.waist), 0.14);
-    b = smin(b, e(d.hips), 0.1);
+    const o = this.outfit;
+    if (!o) return 1e3;
+    const f = o.fit;
+    const e = (q: { c: V3; r: V3 }, fx = 1) => sdEllipsoid(x - q.c[0], y - q.c[1], z - q.c[2], q.r[0] * fx, q.r[1], q.r[2] * fx);
+    let b = e(d.chest, f);
+    b = smin(b, e(d.waist, f), 0.14);
+    b = smin(b, e(d.hips, o.trousers ? 1 : Math.max(f, 0.95)), 0.1);
     b = smin(b, sdRoundCone(x, y, z, d.neck.a[0], d.neck.a[1], d.neck.a[2], d.neck.b[0], d.neck.b[1], d.neck.b[2], d.neck.r, d.neck.r * 0.95), 0.05);
     const ax = Math.abs(x);
-    const L = d.leg;
-    let leg = sdRoundCone(ax, y, z, L.top[0], L.top[1], L.top[2], L.bottom[0], L.bottom[1], L.bottom[2], L.r1, L.r2);
-    // Fabric: long soft folds down the trouser legs, gathering toward the hem.
-    const t = sstep(L.top[1], L.bottom[1], y);
-    const lx = L.top[0] + (L.bottom[0] - L.top[0]) * t;
-    const fa = Math.atan2(z - L.top[2], ax - lx);
-    leg += d.folds * Math.sin(fa * 5 + y * 2.2 + Math.sin(fa * 3) * 0.8) * sstep(d.waistY - 0.05, d.waistY - 0.35, y);
-    b = smin(b, leg, 0.06);
-    // The tee blouses softly over the waistband.
-    b = smin(b, sdEllipsoid(x, y - (d.waistY + 0.045), z - d.waist.c[2], d.waist.r[0] * 1.02, 0.055, d.waist.r[2] * 1.06), 0.03);
-    const s = d.shoe;
+    if (o.trousers) {
+      const L = o.trousers;
+      let leg = sdRoundCone(ax, y, z, L.top[0], L.top[1], L.top[2], L.bottom[0], L.bottom[1], L.bottom[2], L.r1, L.r2);
+      // Fabric: long soft folds down the trouser legs, gathering toward the hem.
+      const t = sstep(L.top[1], L.bottom[1], y);
+      const lx = L.top[0] + (L.bottom[0] - L.top[0]) * t;
+      const fa = Math.atan2(z - L.top[2], ax - lx);
+      leg += o.folds * Math.sin(fa * 5 + y * 2.2 + Math.sin(fa * 3) * 0.8) * sstep(d.waistY - 0.05, d.waistY - 0.35, y);
+      b = smin(b, leg, 0.06);
+    }
+    if (o.bareLegs) b = smin(b, this.legField(ax, y, z) - o.leggings, 0.06);
+    if (o.shorts) {
+      const S = o.shorts;
+      let sh = sdRoundCone(ax, y, z, S.top[0], S.top[1], S.top[2], S.bottom[0], S.bottom[1], S.bottom[2], S.r1, S.r2);
+      sh += o.folds * Math.sin(Math.atan2(z, ax - S.top[0]) * 5 + y * 3);
+      b = smin(b, sh, 0.04);
+    }
+    if (o.skirt) {
+      // A soft A-line skirt, slightly oval, with loose folds toward the hem.
+      const S = o.skirt;
+      const zz = z / 0.82;
+      let sk = sdRoundCone(x, y, zz, 0, S.top[1], S.top[2], 0, S.bottom[1], S.bottom[2], S.r1, S.r2) * 0.82;
+      sk += o.folds * Math.sin(Math.atan2(zz, x) * 9 + y * 1.5) * sstep(S.top[1], S.bottom[1], y);
+      // A clean, flat hem (the cone's round cap would read as a bulb).
+      sk = smax(sk, S.bottom[1] - y, 0.012);
+      b = smin(b, sk, 0.03);
+    }
+    const s = o.shoe;
     b = smin(b, sdEllipsoid(ax - s.c[0], y - s.c[1], z - s.c[2], s.r[0], s.r[1], s.r[2]), 0.04);
+    // A loose tee blouses softly over the waistband.
+    if (o.blouse) b = smin(b, sdEllipsoid(x, y - (d.waistY + 0.045), z - d.waist.c[2], d.waist.r[0] * 1.02, 0.055, d.waist.r[2] * 1.06), 0.03);
     return Math.max(b, -y);
+  }
+
+  /** Anatomical legs (for shorts, leggings and skirts): thigh, knee, calf and ankle. */
+  private legField(ax: number, y: number, z: number) {
+    const L = this.def.legs;
+    let l = sdRoundCone(ax, y, z, L.x, 1.72, 0, L.x * 0.96, L.kneeY, 0.012, L.thighR, L.kneeR);
+    l = smin(l, sdRoundCone(ax, y, z, L.x * 0.96, L.kneeY, 0.012, L.x * 0.93, 0.17, 0, L.kneeR, L.ankleR), 0.04);
+    l = smin(l, sdEllipsoid(ax - L.x * 0.95, y - (L.kneeY - 0.3), z + 0.02, L.calfR, 0.22, L.calfR * 1.05), 0.08);
+    return smin(l, sdEllipsoid(ax - L.x * 0.93, y - 0.06, z - 0.05, 0.055, 0.05, 0.12), 0.05);
   }
 
   protected armField(x: number, y: number, z: number, i: 0 | 1) {
@@ -317,7 +459,7 @@ export class HumanAnatomy extends Anatomy {
     let a = sdRoundCone(x, y, z, s[0], s[1], s[2], el[0], el[1], el[2], r0, r1);
     a = smin(a, sdRoundCone(x, y, z, el[0], el[1], el[2], h[0], h[1], h[2], r1, r2), 0.025);
     // Loose sleeve rides with the upper arm.
-    a = smin(a, this.sleeveField(x, y, z, side), 0.04);
+    if (this.outfit?.sleeve) a = smin(a, this.sleeveField(x, y, z, side), 0.04);
     return smin(a, this.handField(x, y, z, i), 0.018);
   }
 
@@ -369,24 +511,34 @@ export class HumanAnatomy extends Anatomy {
   }
 
   private sleeveField(x: number, y: number, z: number, side: number) {
-    const s = this.def.sleeve;
+    const s = this.outfit.sleeve ?? this.def.sleeve;
     return sdRoundCone(x * side, y, z, s.a[0], s.a[1], s.a[2], s.b[0], s.b[1], s.b[2], s.r1, s.r2);
   }
 
 
   regions(x: number, y: number, z: number, w: Float32Array, out: Float32Array) {
-    const d = this.def;
-    // Arm skin inside (or on) the sleeve is shirt; above the sleeve end too,
-    // so the shoulder never shows skin.
-    const sl = d.sleeve;
-    const sleeve = Math.max(1 - sstep(0.004, 0.014, this.sleeveField(x, y, z, x >= 0 ? 1 : -1)), sstep(sl.b[1] + 0.02, sl.b[1] + 0.06, y));
+    const o = this.outfit;
+    const ax = Math.abs(x);
     const body = w[PART.body];
     const arm = w[PART.armL] + w[PART.armR];
-    // Crisp hairline: the blend weight is soft, the colour edge should not be.
-    out[0] = sstep(0.3, 0.7, w[PART.crown]);
-    out[1] = body * sstep(d.waistY - 0.02, d.waistY + 0.02, y) * (1 - sstep(d.neckline - 0.02, d.neckline + 0.02, y)) + arm * sleeve;
-    out[2] = body * (1 - sstep(d.waistY - 0.02, d.waistY + 0.02, y)) * sstep(d.hemY - 0.02, d.hemY + 0.01, y);
-    out[3] = body * (1 - sstep(d.hemY - 0.02, d.hemY + 0.01, y));
+    // Hair wherever the hair surface is the outermost one: exact and crisp even
+    // for thin styles, where the soft skinning weights would blur into skin.
+    out[0] = w[PART.body] + arm > 0.6 ? 0 : 1 - sstep(-0.003, 0.003, this.crownField(x, y, z) - this.headField(x, y, z) + 0.004);
+    // Top: below the neckline (plus straps over the shoulders) and above its hem.
+    let upper = 1 - sstep(o.shirtTop - 0.02, o.shirtTop + 0.02, y);
+    if (o.strap) {
+      const [s0, s1, s2] = o.strap;
+      upper = Math.max(upper, sstep(s0 - 0.012, s0 + 0.012, ax) * (1 - sstep(s1 - 0.012, s1 + 0.012, ax)) * (1 - sstep(s2 - 0.02, s2 + 0.02, y)));
+    }
+    out[1] = body * sstep(o.shirtBottom - 0.02, o.shirtBottom + 0.02, y) * upper;
+    if (o.sleeve) {
+      // Arm skin inside (or on) the sleeve is shirt; above the sleeve end too,
+      // so the shoulder never shows skin.
+      const sl = o.sleeve;
+      out[1] += arm * Math.max(1 - sstep(0.004, 0.014, this.sleeveField(x, y, z, x >= 0 ? 1 : -1)), sstep(sl.b[1] + 0.02, sl.b[1] + 0.06, y));
+    }
+    out[2] = o.pantsTop > 0 ? body * (1 - sstep(o.pantsTop - 0.02, o.pantsTop + 0.02, y)) * sstep(o.pantsBottom - 0.02, o.pantsBottom + 0.01, y) : 0;
+    out[3] = body * (1 - sstep(o.shoeTop - 0.02, o.shoeTop + 0.01, y));
     return true;
   }
 
