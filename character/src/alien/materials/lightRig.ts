@@ -79,6 +79,9 @@ vec3 rigLightW(vec3 albedo, vec3 N, vec3 V, vec3 viewPos, vec3 shadowMul, float 
   // Where skin turns from light into shadow it glows warm, like light through skin.
   float term = smoothstep(-0.44, -0.3, nl) * (1.0 - smoothstep(-0.26, -0.12, nl));
   col = mix(col, col * vec3(1.2, 0.74, 0.64) + vec3(0.04, 0.0, 0.0), term * warm * uCel * 0.6 * shade);
+  // Planes facing down (under the jaw, under the arms) take a saturated warm shade.
+  float under = smoothstep(-0.4, -0.65, N.y);
+  col = mix(col, albedo * vec3(1.02, 0.56, 0.46), under * warm * uCel * 0.62 * shade);
   float line = smoothstep(0.24, 0.07, facing) * shade * (1.0 - 0.6 * uCel);
   col = mix(col, albedo * shadowMul * 0.62, line * 0.7 * uIllustrate);
   float grain = rigHash(floor(gl_FragCoord.xy / 1.6)) - 0.5;

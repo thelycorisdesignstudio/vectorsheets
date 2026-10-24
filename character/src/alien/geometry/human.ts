@@ -103,7 +103,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     // Weight on one hip: left hand on the hip, right forearm raised and turned
     // palm-up in an open, presenting gesture, head tipped a little.
     restPose: { armLx: 0.14, armLz: 0.55, elbowLx: 0, elbowL: -1.26, armRx: -0.05, armRz: -0.24, armRy: -0.75, elbowRx: -1.3, elbowR: 0, elbowRy: -0.45, handRy: -1.1, headRz: 0.09 },
-    face: { scale: 0.36, eyeSpread: 0.102, eyeLift: 0.02, browOffset: 0.075, mouthOffset: 0.14, blush: { dx: 0.135, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 1, lidRest: 0.74, pupilBase: 0.36, mouthScale: 0.85, eyeStyle: 'flat' },
+    face: { scale: 0.36, eyeSpread: 0.112, eyeLift: 0.02, browOffset: 0.1, mouthOffset: 0.168, blush: { dx: 0.135, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 1, lidRest: 0.97, pupilBase: 0.34, mouthScale: 0.8, eyeStyle: 'flat', irisLift: 0.03, eyeAspect: 0.95, eyeSize: 1.18, browSize: 1.35, lipWeight: 0.7, freckles: 0.6 },
     bangles: [
       // A stack of beaded colours on the presenting wrist, one gold bangle on the other.
       { arm: 1, t: 0.8, color: '#3fa7a0', tube: 0.011 },
@@ -137,7 +137,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     blush: 0.15,
     legs: { x: 0.15, thighR: 0.14, kneeY: 0.95, kneeR: 0.08, ankleR: 0.055, calfR: 0.088 },
     restPose: { armLx: -0.04, armLz: -0.07, elbowLx: -0.24, elbowL: 0.04, armRx: -0.04, armRz: 0.07, elbowRx: -0.24, elbowR: -0.04 },
-    face: { scale: 0.36, eyeSpread: 0.106, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.14, blush: { dx: 0.14, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 0.6, lidRest: 0.86, pupilBase: 0.36, eyeStyle: 'flat' },
+    face: { scale: 0.36, eyeSpread: 0.112, eyeLift: 0.02, browOffset: 0.098, mouthOffset: 0.165, blush: { dx: 0.14, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 0.6, lidRest: 0.97, pupilBase: 0.34, eyeStyle: 'flat', irisLift: 0.03, eyeAspect: 0.95, eyeSize: 1.12, browSize: 1.3, lipWeight: 0.75 },
     bangles: [],
   },
   // A rounder face and fuller figure: curly hair gathered into a high puff,
@@ -166,7 +166,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     blush: 0.25,
     legs: { x: 0.16, thighR: 0.155, kneeY: 0.95, kneeR: 0.085, ankleR: 0.055, calfR: 0.092 },
     restPose: { armLx: -0.1, armLz: -0.05, elbowLx: -1.05, elbowL: -1.0, armRx: -0.1, armRz: 0.05, elbowRx: -1.05, elbowR: 1.0, headRz: -0.05 },
-    face: { scale: 0.38, eyeSpread: 0.108, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.135, blush: { dx: 0.15, dy: -0.06, rx: 0.045, ry: 0.026 }, liner: 1, lidRest: 0.9, pupilBase: 0.36, mouthScale: 0.85, eyeStyle: 'flat' },
+    face: { scale: 0.38, eyeSpread: 0.116, eyeLift: 0.02, browOffset: 0.1, mouthOffset: 0.16, blush: { dx: 0.15, dy: -0.06, rx: 0.045, ry: 0.026 }, liner: 1, lidRest: 0.97, pupilBase: 0.34, mouthScale: 0.85, eyeStyle: 'flat', irisLift: 0.03, eyeAspect: 0.95, eyeSize: 1.16, browSize: 1.3, lipWeight: 0.75 },
     bangles: [],
   },
 };
@@ -194,7 +194,14 @@ function outfitFor(fig: Figure, outfit: Outfit, d: FigureDef): OutfitDef {
         shoeTop: 0.3,
       };
     }
-    // Studio: a sports top (bare midriff for Mira), high-waisted leggings, trainers and a fitness band.
+    if (fig === 'noor') {
+      // A boxy cropped tee with wide half sleeves over high-waisted leggings.
+      return {
+        ...base, sleeve: d.sleeve, fit: 1, leggings: 0.007, shirtTop: d.neckline, strap: null, shirtBottom: 1.96,
+        pantsTop: 1.92, pantsBottom: 0.2, bangles: [{ arm: 0, t: 0.9, color: '#2b2c36', tube: 0.017 }],
+      };
+    }
+    // Studio: a sports top with a bare midriff, high-waisted leggings, trainers and a fitness band.
     const lady = fig === 'lady';
     return {
       ...base, fit: lady ? 0.9 : 0.95, leggings: 0.007,
@@ -255,6 +262,7 @@ export class HumanAnatomy extends Anatomy {
     this.hands = [d.arm.hand, mirror(d.arm.hand)];
     this.bellyCollider = { c: [0, (d.waistY + d.neckline) / 2, 0.02], r: [0.36, 0.6, 0.26] };
     this.footX = this.outfit.shoe.c[0];
+    if (this.outfit.sneaker) this.footwear = { soleY: 0.036, sockY: this.outfit.shoeTop > 0.2 ? 0.15 : 99 };
     this.wobbleRange = [d.neckline + 0.3, this.head.c[1] + 0.7];
     this.setup();
   }
@@ -342,7 +350,8 @@ export class HumanAnatomy extends Anatomy {
         h = smax(h, cut, 0.03);
         // Soft strand clumps running down the length (stronger toward the ends).
         const ang = Math.atan2(x, z + 0.03);
-        h += 0.0022 * Math.sin(ang * 34 + 0.6 * Math.sin(y * 9)) * sstep(c + 0.25, c - 0.1, y);
+        // Big, chunky locks (drawn hair) rather than fine strands.
+        h += 0.0055 * Math.sin(ang * 12 + 0.9 * Math.sin(y * 7)) * sstep(c + 0.22, c - 0.05, y);
         return h;
       }
       case 'ponytail': {
@@ -531,6 +540,14 @@ export class HumanAnatomy extends Anatomy {
     return sdRoundCone(x * side, y, z, s.a[0], s.a[1], s.a[2], s.b[0], s.b[1], s.b[2], s.r1, s.r2);
   }
 
+
+  /** The head casts a soft shadow onto the neck, just under the jaw. */
+  castShade(x: number, y: number, z: number) {
+    const chin = this.head.c[1] - this.head.ry * 0.78;
+    if (y > chin + 0.03 || Math.abs(x) > 0.16) return 1;
+    const d = sstep(chin + 0.03, chin - 0.02, y) * (1 - sstep(chin - 0.12, chin - 0.2, y)) * sstep(-0.08, 0.02, z);
+    return 1 - 0.5 * d;
+  }
 
   regions(x: number, y: number, z: number, w: Float32Array, out: Float32Array) {
     const o = this.outfit;

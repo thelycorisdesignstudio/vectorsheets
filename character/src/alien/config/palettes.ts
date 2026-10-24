@@ -101,10 +101,10 @@ export const PALETTES: Record<PaletteName, Palette> = {
     tip: '#ff5b37',
     shadow: '#d07c5d',
     blush: '#f0857a',
-    brow: '#8a2e1a',
+    brow: '#c8472a',
     sclera: '#ffffff',
     pupil: '#1f4d4f',
-    lip: '#c25a4a',
+    lip: '#bf5446',
     mouth: '#6b2222',
     tongue: '#e66a6a',
     teeth: '#ffffff',
@@ -113,7 +113,7 @@ export const PALETTES: Record<PaletteName, Palette> = {
     glow: '#ffffff',
     regions: { hair: '#f2603f', shirt: '#dcd7cf', pants: '#21415f', shoes: '#3b2723' },
     outfits: {
-      workout: { shirt: '#a796dd', pants: '#2c2f45', shoes: '#f4f1ea' },
+      workout: { shirt: '#a796dd', pants: '#2c2f45', shoes: '#b6a8ec' },
       dress: { shirt: '#86ad92', pants: '#86ad92', shoes: '#c4935f' },
     },
   },
@@ -138,7 +138,7 @@ export const PALETTES: Record<PaletteName, Palette> = {
     glow: '#ffffff',
     regions: { hair: '#2b1d16', shirt: '#5f957a', pants: '#d8c7a4', shoes: '#f2efe8' },
     outfits: {
-      workout: { shirt: '#ef7d45', pants: '#2b2f3a', shoes: '#f3f1ec' },
+      workout: { shirt: '#ef7d45', pants: '#2b2f3a', shoes: '#30364a' },
     },
   },
   noor: {
@@ -162,7 +162,7 @@ export const PALETTES: Record<PaletteName, Palette> = {
     glow: '#ffffff',
     regions: { hair: '#1f1612', shirt: '#e3a83f', pants: '#5f6d3d', shoes: '#efe9e0' },
     outfits: {
-      workout: { shirt: '#4fb3a0', pants: '#2b2b3a', shoes: '#ffffff' },
+      workout: { shirt: '#f2a5c6', pants: '#2b2b3a', shoes: '#4fb3a0' },
       dress: { shirt: '#c8573d', pants: '#c8573d', shoes: '#8a5a3b' },
     },
   },

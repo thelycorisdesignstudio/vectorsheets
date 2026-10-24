@@ -140,7 +140,7 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
         col = mix(col, uLash, lash * uClosed);
         // Open eyes: an upper lash line that thickens and flicks at the outer corner.
         float outer = p.x * uSide;
-        float lw2 = 0.13 + 0.16 * smoothstep(0.0, 0.9, outer);
+        float lw2 = 0.15 + 0.24 * smoothstep(0.0, 0.9, outer);
         // Follow the lid, or the top of the eye when the lid is out of sight.
         float below = min(upper, sqrt(max(0.0, 1.0 - p.x * p.x))) - p.y;
         float liner = smoothstep(-0.03 - aa, -0.03 + aa, below) * (1.0 - smoothstep(lw2 - aa, lw2 + aa, below));

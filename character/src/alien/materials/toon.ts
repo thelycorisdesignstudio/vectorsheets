@@ -62,6 +62,12 @@ export type ToonMaterial = THREE.ShaderMaterial & {
     uPants: { value: THREE.Color };
     uShoes: { value: THREE.Color };
     uClothShadow: { value: THREE.Color };
+    uHairShadow: { value: THREE.Color };
+    uFreckles: { value: number };
+    uSole: { value: THREE.Color };
+    uSock: { value: THREE.Color };
+    uSoleY: { value: number };
+    uSockY: { value: number };
   };
 };
 
@@ -151,6 +157,13 @@ uniform vec3 uShirt;
 uniform vec3 uPants;
 uniform vec3 uShoes;
 uniform vec3 uClothShadow;
+uniform vec3 uHairShadow;
+uniform float uFreckles;
+uniform vec3 uSole;
+uniform vec3 uSock;
+uniform float uSoleY;
+uniform float uSockY;
+float frHash(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 15731.743); }
 #ifdef USE_MASKS
 varying vec4 vMask;
 varying float vAO;
@@ -186,8 +199,20 @@ void main() {
   albedo = mix(albedo, uShirt, rg.y);
   albedo = mix(albedo, uPants, rg.z);
   albedo = mix(albedo, uShoes, rg.w);
+  // Trainers: a white sole under the upper, and socks above the collar.
+  albedo = mix(albedo, uSole, rg.w * (1.0 - smoothstep(uSoleY - 0.004, uSoleY + 0.004, vRest.y)));
+  albedo = mix(albedo, uSock, rg.w * smoothstep(uSockY - 0.006, uSockY + 0.006, vRest.y));
+  // Freckles: a light scatter of small dots across the nose and cheeks.
+  if (uFreckles > 0.0) {
+    vec2 fp = vRest.xy * 150.0;
+    vec2 cell = floor(fp);
+    float dotMask = 1.0 - smoothstep(0.16, 0.3, length(fract(fp) - 0.5 - (vec2(frHash(cell), frHash(cell + 7.1)) - 0.5) * 0.3));
+    float keep = step(0.8, frHash(cell + 3.7));
+    float zone = smoothstep(-1.1, -0.3, vMask.z) * step(0.0, vRest.z) * (1.0 - max(max(rg.x, rg.y), max(rg.z, rg.w)));
+    albedo = mix(albedo, albedo * vec3(0.84, 0.66, 0.58), dotMask * keep * zone * uFreckles);
+  }
   float cloth = max(max(rg.x, rg.y), max(rg.z, rg.w));
-  vec3 shadowMul = mix(uShadowMul, uClothShadow, cloth);
+  vec3 shadowMul = mix(mix(uShadowMul, uClothShadow, cloth), uHairShadow, rg.x);
   #else
   vec3 shadowMul = uShadowMul;
   #endif
@@ -246,6 +271,12 @@ export function createToonMaterial(o: ToonOptions = {}): ToonMaterial {
       uPants: { value: new THREE.Color('#000000') },
       uShoes: { value: new THREE.Color('#000000') },
       uClothShadow: { value: new THREE.Color(0.62, 0.64, 0.74) },
+      uHairShadow: { value: new THREE.Color(0.8, 0.62, 0.58) },
+      uFreckles: { value: 0 },
+      uSole: { value: new THREE.Color('#ffffff') },
+      uSock: { value: new THREE.Color('#ffffff') },
+      uSoleY: { value: -1 },
+      uSockY: { value: 99 },
       ...LIGHT_RIG,
     },
     vertexShader: vertex,

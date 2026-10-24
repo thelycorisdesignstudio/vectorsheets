@@ -162,7 +162,7 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
       occ += (hh - Math.max(d, 0)) * weight;
       weight *= 0.6;
     }
-    ao[v] = Math.min(1, Math.max(0, 1 - occ * 3.6));
+    ao[v] = Math.min(1, Math.max(0, 1 - occ * 3.6)) * anatomy.castShade(x, y, z);
   }
 
   return { positions, normals, indices, skinIndex, skinWeight, masks, ao, regions };

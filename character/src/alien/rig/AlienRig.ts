@@ -262,7 +262,7 @@ export class AlienRig {
     for (const lm of this.anatomy.eyes) {
       const group = new THREE.Group();
       // Set into the face (not stuck on): sunk slightly and following the surface.
-      group.position.copy(this.toHead(lm.center)).addScaledVector(v3(lm.normal), -0.013 * this.anatomy.face.scale);
+      group.position.copy(this.toHead(lm.center)).addScaledVector(v3(lm.normal), (this.anatomy.spec.kind === 'human' ? 0.002 : -0.013) * this.anatomy.face.scale);
       group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), v3(lm.normal).lerp(new THREE.Vector3(0, 0, 1), 0.3).normalize());
       const mat = createEyeMaterial(lm.side, 1);
       mat.uniforms.uLiner.value = this.anatomy.face.liner ?? 0;
@@ -491,6 +491,9 @@ export class AlienRig {
     u.uFaceC.value.set(h.c[0], h.c[1] + this.anatomy.face.eyeLift * 0.5, h.c[2] + h.depth * 0.4);
     u.uFaceR.value.set(h.rx * 0.95, h.ry * 0.95);
     u.uSheen.value.set(p.sheen ?? '#000000');
+    u.uFreckles.value = this.anatomy.face.freckles ?? 0;
+    u.uSoleY.value = this.anatomy.footwear.soleY;
+    u.uSockY.value = this.anatomy.footwear.sockY;
     u.uTip.value.set(p.tip);
     u.uBlush.value.set(p.blush);
     shadowMultiplier(p.shadow, p.base, u.uShadowMul.value);
@@ -537,7 +540,8 @@ export class AlienRig {
     this.eyeShape = shape;
     const fs = this.anatomy.face.scale;
     const es = this.anatomy.face.eyeSize ?? 1;
-    const [sx, sy] = EYE_SHAPES[shape].size.map((v) => v * fs * es);
+    const [sx, sy0] = EYE_SHAPES[shape].size.map((v) => v * fs * es);
+    const sy = sy0 * (this.anatomy.face.eyeAspect ?? 1);
     for (const e of this.eyes) {
       e.mesh.scale.set(sx, sy, 0.034 * fs);
       e.mat.uniforms.uAspect.value = sy / sx;
@@ -557,7 +561,8 @@ export class AlienRig {
       const geo = base.clone();
       const fs = this.anatomy.face.scale;
       // Slimmer than sculpted: soft, friendly brows rather than heavy slabs.
-      geo.scale(fs, fs * (this.anatomy.face.eyeStyle === 'flat' ? 1.05 : 0.8), fs);
+      const bs = this.anatomy.face.browSize ?? 1;
+      geo.scale(fs * bs, fs * bs * (this.anatomy.face.eyeStyle === 'flat' ? 1.05 : 0.8), fs);
       if (b.side < 0) {
         geo.scale(-1, 1, 1);
         // Mirroring flips the winding; restore it so the brow stays solid.
@@ -571,7 +576,7 @@ export class AlienRig {
         index.needsUpdate = true;
       }
       b.mesh = new THREE.Mesh(geo, b.mat);
-      b.mat.uniforms.uBrowHalf.value = BROW_HALF[shape] * this.anatomy.face.scale;
+      b.mat.uniforms.uBrowHalf.value = BROW_HALF[shape] * this.anatomy.face.scale * (this.anatomy.face.browSize ?? 1);
       b.anchor.add(b.mesh);
     }
     base?.dispose();
@@ -746,14 +751,14 @@ export class AlienRig {
       // Each eye converges slightly toward near targets (independent pupils).
       const px = clamp((yaw - pose.vergence * e.side) * 0.85, -0.42, 0.42);
       const py = clamp(-pitch * 0.85, -0.4, 0.4);
-      u.uPupilPos.value.set(px, py);
+      u.uPupilPos.value.set(px, py + (this.anatomy.face.irisLift ?? 0));
       const base = this.anatomy.face.pupilBase ?? 0.28;
       u.uPupilSize.value = clamp(base + f.pupil * 0.5, base - 0.06, 0.86);
     }
   }
 
   private updateBrows(f: Pose['face']) {
-    const scale = (BROW_HALF[this.browShape] / 0.11) * this.anatomy.face.scale;
+    const scale = (BROW_HALF[this.browShape] / 0.11) * this.anatomy.face.scale * (this.anatomy.face.browSize ?? 1);
     for (const b of this.brows) {
       const raise = (clamp(f.browRaise, -0.6, 1.3) * 0.044 + clamp(f.browAsym, -1.2, 1.2) * b.side * 0.026) * this.anatomy.face.scale;
       const tilt = clamp(f.browTilt, -1.2, 1.2);
@@ -776,7 +781,7 @@ export class AlienRig {
     const round = clamp(f.mouthRound, 0, 1);
     const smile = clamp(f.smile, -1, 1.4);
     const W = 0.14 * (this.anatomy.face.mouthScale ?? 1) * clamp(f.mouthWidth, 0.4, 1.6) * (1 - 0.22 * round) * (1 + 0.15 * open);
-    const minT = 0.03;
+    const minT = 0.03 * (this.anatomy.face.lipWeight ?? 1);
     const out = this.patchScratch;
     for (let i = 0; i < MOUTH_COLS; i++) {
       const s = (i / (MOUTH_COLS - 1)) * 2 - 1;

@@ -109,6 +109,16 @@ export interface FaceLayout {
   eyeSize?: number;
   /** mouth width relative to the face scale (1 = default) */
   mouthScale?: number;
+  /** eye height relative to width (1 = the eye shape's own; < 1 = wider almond) */
+  eyeAspect?: number;
+  /** brow size relative to the face scale (1 = default) */
+  browSize?: number;
+  /** raises the iris so the upper lid tucks over its top (drawn-eye look) */
+  irisLift?: number;
+  /** closed-mouth line thickness relative to default */
+  lipWeight?: number;
+  /** freckle strength (0 = none) */
+  freckles?: number;
   /** resting pupil/iris size as a fraction of the eye (Oru: big, dark, glossy) */
   pupilBase?: number;
   /** resting openness of the upper lids (1 = fully open) */
@@ -141,6 +151,8 @@ export class Anatomy {
   blushStrength = 1;
   /** how far arm gestures swing (long human arms hang closer and need more lift) */
   armSwing = 1;
+  /** trainer sole top and sock start heights (model space); off by default */
+  footwear = { soleY: -1, sockY: 99 };
   bangles: Bangle[] = [];
   ears: Leaf[] = [];
   eyes: EyeLandmark[] = [];
@@ -177,6 +189,11 @@ export class Anatomy {
    * Colour regions for clothed characters: writes [hair, shirt, pants, shoes]
    * weights into `out` and returns true, or returns false (no regions).
    */
+  /** Extra baked shading (1 = none), e.g. the shadow a head casts on the neck. */
+  castShade(_x: number, _y: number, _z: number): number {
+    return 1;
+  }
+
   regions(_x: number, _y: number, _z: number, _w: Float32Array, _out: Float32Array): boolean {
     return false;
   }

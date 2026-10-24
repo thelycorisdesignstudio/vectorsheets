@@ -127,7 +127,7 @@ export const THEO_PROFILE: CharacterProfile = {
   },
   appearance: {
     kind: 'human', figure: 'man', hair: 'crop', outfit: 'workout', palette: 'theo', head: 'puck', crown: 'fronds', ears: 'none',
-    eyeShape: 'oval', browShape: 'pill', accessories: [],
+    eyeShape: 'almond', browShape: 'pill', accessories: [],
   },
   behaviour: {
     ...ORU_PROFILE.behaviour,
@@ -180,7 +180,7 @@ export const NOOR_PROFILE: CharacterProfile = {
   },
   appearance: {
     kind: 'human', figure: 'noor', hair: 'puff', outfit: 'workout', palette: 'noor', head: 'puck', crown: 'fronds', ears: 'none',
-    eyeShape: 'oval', browShape: 'arched', accessories: [],
+    eyeShape: 'almond', browShape: 'arched', accessories: [],
   },
   behaviour: {
     ...ORU_PROFILE.behaviour,
