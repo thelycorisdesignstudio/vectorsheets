@@ -24,6 +24,7 @@ export type EyeMaterial = THREE.ShaderMaterial & {
     uCatch: { value: number };
     uClosed: { value: number };
     uLash: { value: THREE.Color };
+    uLiner: { value: number };
   };
 };
 
@@ -44,6 +45,7 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
       uCatch: { value: 0.35 },
       uClosed: { value: 0 },
       uLash: { value: new THREE.Color('#5530c9') },
+      uLiner: { value: 0 },
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv2;
@@ -76,6 +78,7 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
       uniform float uCatch;
       uniform float uClosed;
       uniform vec3 uLash;
+      uniform float uLiner;
       varying vec2 vUv2;
       varying vec3 vN;
       varying vec3 vFaceN;
@@ -126,6 +129,14 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
         float lw = 0.11 + aa;
         float lash = (1.0 - smoothstep(lw * 0.5, lw, abs(p.y - lineY))) * smoothstep(0.98, 0.7, abs(p.x));
         col = mix(col, uLash, lash * uClosed);
+        // Open eyes: an upper lash line that thickens and flicks at the outer corner.
+        float outer = p.x * uSide;
+        float lw2 = 0.13 + 0.16 * smoothstep(0.0, 0.9, outer);
+        // Follow the lid, or the top of the eye when the lid is out of sight.
+        float below = min(upper, sqrt(max(0.0, 1.0 - p.x * p.x))) - p.y;
+        float liner = smoothstep(-0.03 - aa, -0.03 + aa, below) * (1.0 - smoothstep(lw2 - aa, lw2 + aa, below));
+        liner *= smoothstep(-0.95, -0.6, outer);
+        col = mix(col, uLash * 0.45, liner * uLiner * (1.0 - uClosed));
         gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
       }

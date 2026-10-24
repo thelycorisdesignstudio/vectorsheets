@@ -214,6 +214,7 @@ export class AlienRig {
     this.disposables.push(this.shadowMat, this.footMat, shadowGeo);
 
     this.accessories = buildAccessories(a, { mover: this.mover, head: this.head, crown: this.crown }, palette);
+    this.buildBangles();
 
     this.mover.updateMatrixWorld(true);
     // Skeleton order must match the bone slots baked by bodyMesh (BONE + lobe bones).
@@ -229,12 +230,31 @@ export class AlienRig {
     return v3(p).sub(this.neck);
   }
 
+  /** Bangles are separate rings riding on the forearm bones, each in its own colour. */
+  private buildBangles() {
+    const a = this.anatomy;
+    for (const b of a.bangles) {
+      const el = v3(a.elbows[b.arm]), hand = v3(a.hands[b.arm]);
+      const axis = hand.clone().sub(el);
+      const r = a.armRadiusAt(b.arm, b.t) + b.tube * 0.6;
+      const geo = new THREE.TorusGeometry(r, b.tube, 10, 40);
+      const color = new THREE.Color(b.color);
+      const mat = createToonMaterial({ color: b.color, shadow: '#' + color.clone().multiplyScalar(0.62).getHexString(), shade: 0.85 });
+      const ring = new THREE.Mesh(geo, mat);
+      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis.clone().normalize());
+      ring.position.copy(axis.multiplyScalar(b.t));
+      (b.arm === 0 ? this.foreL : this.foreR).add(ring);
+      this.disposables.push(geo, mat);
+    }
+  }
+
   private buildEyes() {
     for (const lm of this.anatomy.eyes) {
       const group = new THREE.Group();
       group.position.copy(this.toHead(lm.center)).addScaledVector(v3(lm.normal), -0.006);
       group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), v3(lm.normal).lerp(new THREE.Vector3(0, 0, 1), 0.5).normalize());
       const mat = createEyeMaterial(lm.side, 1);
+      mat.uniforms.uLiner.value = this.anatomy.face.liner ?? 0;
       const mesh = new THREE.Mesh(this.eyeGeo, mat);
       mesh.renderOrder = 1;
       group.add(mesh);
@@ -669,7 +689,9 @@ export class AlienRig {
       const curveL = 0.18 + 0.62 * ll;
       // Fully closed: the upper lid edge tucks just under the lower lid everywhere.
       const closed = lower + Math.min(curveU, curveL) - 0.015;
-      let upper = lerp(closed, 1.18, clamp(f.lidUpper, 0, 1.3)) - pitch * 0.25 * clamp(f.lidUpper, 0, 1);
+      // Some faces rest with heavier upper lids (a calm, knowing look).
+      const lidU = f.lidUpper * (this.anatomy.face.lidRest ?? 1);
+      let upper = lerp(closed, 1.18, clamp(lidU, 0, 1.3)) - pitch * 0.25 * clamp(lidU, 0, 1);
       upper = lerp(upper, closed, blink);
       u.uLids.value.set(Math.max(upper, closed), lower, curveU, curveL);
       u.uClosed.value = clamp(1 - (upper - closed) / 0.35, 0, 1);

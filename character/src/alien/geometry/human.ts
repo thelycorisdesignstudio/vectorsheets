@@ -1,4 +1,4 @@
-import { Anatomy, type AnatomySpec, type HeadDef, PART } from './anatomy';
+import { Anatomy, type AnatomySpec, type Bangle, type FaceLayout, type HeadDef, PART } from './anatomy';
 import { type V3, makeLeaf, sdEllipsoid, sdRoundCone, smax, smin, sstep } from './sdf';
 
 /**
@@ -20,7 +20,7 @@ interface FigureDef {
   chest: { c: V3; r: V3 };
   waist: { c: V3; r: V3 };
   hips: { c: V3; r: V3 };
-  sleeve: { dx: number; y: number; r: V3 };
+  sleeve: { a: V3; b: V3; r1: number; r2: number };
   arm: { shoulder: V3; elbow: V3; hand: V3; r: [number, number, number] };
   mitten: V3;
   leg: { top: V3; bottom: V3; r1: number; r2: number };
@@ -29,48 +29,66 @@ interface FigureDef {
   hemY: number;
   neckline: number;
   ears: boolean;
+  face: FaceLayout;
+  bangles: Bangle[];
+  /** uniform scale of head and hair about the chin (1 = as sculpted) */
+  headScale?: number;
 }
 
 const FIGURES: Record<Figure, FigureDef> = {
+  // Proportions after a stop-motion style figure: a small oval head with a
+  // pointed chin, a short neck, a boxy tee with elbow-length sleeves, and
+  // huge high-waisted balloon trousers that fall almost to the floor.
   lady: {
-    head: { c: [0, 2.76, 0], rx: 0.44, ry: 0.53, depth: 0.43, round: 0.2, bulge: 0, backBulge: 0, squircle: 2 },
-    cranium: { c: [0, 2.83, -0.01], r: [0.42, 0.46, 0.43] },
-    jaw: { c: [0, 2.63, 0.05], r: [0.36, 0.31, 0.37] },
-    chin: { c: [0, 2.43, 0.14], r: [0.15, 0.1, 0.14] },
-    nose: { c: [0, 2.67, 0.44], r: [0.045, 0.055, 0.048] },
-    neck: { a: [0, 2.08, -0.01], b: [0, 2.42, -0.02], r: 0.07 },
-    chest: { c: [0, 1.92, 0], r: [0.31, 0.22, 0.18] },
-    waist: { c: [0, 1.6, 0], r: [0.25, 0.27, 0.165] },
-    hips: { c: [0, 1.38, 0], r: [0.28, 0.19, 0.19] },
-    sleeve: { dx: 0.32, y: 1.93, r: [0.15, 0.13, 0.135] },
-    arm: { shoulder: [0.33, 1.97, 0], elbow: [0.43, 1.65, 0.03], hand: [0.47, 1.34, 0.06], r: [0.066, 0.058, 0.05] },
-    mitten: [0.068, 0.092, 0.042],
-    leg: { top: [0.135, 1.3, 0], bottom: [0.2, 0.2, 0.02], r1: 0.155, r2: 0.2 },
-    shoe: { c: [0.2, 0.075, 0.05], r: [0.1, 0.075, 0.16] },
-    waistY: 1.44,
-    hemY: 0.2,
-    neckline: 2.08,
+    head: { c: [0, 2.86, 0], rx: 0.27, ry: 0.32, depth: 0.26, round: 0.12, bulge: 0, backBulge: 0, squircle: 2 },
+    cranium: { c: [0, 2.92, -0.02], r: [0.255, 0.28, 0.27] },
+    jaw: { c: [0, 2.8, 0.02], r: [0.225, 0.19, 0.23] },
+    chin: { c: [0, 2.67, 0.075], r: [0.075, 0.06, 0.085] },
+    nose: { c: [0, 2.825, 0.255], r: [0.026, 0.033, 0.03] },
+    neck: { a: [0, 2.44, -0.01], b: [0, 2.72, -0.02], r: 0.058 },
+    chest: { c: [0, 2.3, 0], r: [0.33, 0.2, 0.19] },
+    waist: { c: [0, 2.04, 0], r: [0.32, 0.25, 0.2] },
+    hips: { c: [0, 1.8, 0], r: [0.3, 0.16, 0.21] },
+    sleeve: { a: [0.3, 2.4, 0], b: [0.41, 2.18, 0.02], r1: 0.115, r2: 0.105 },
+    arm: { shoulder: [0.3, 2.41, 0], elbow: [0.41, 2.1, 0.03], hand: [0.45, 1.77, 0.07], r: [0.052, 0.045, 0.039] },
+    mitten: [0.05, 0.072, 0.028],
+    leg: { top: [0.15, 1.62, 0], bottom: [0.235, 0.33, 0.02], r1: 0.2, r2: 0.25 },
+    shoe: { c: [0.24, 0.055, 0.1], r: [0.085, 0.055, 0.14] },
+    waistY: 1.86,
+    hemY: 0.1,
+    neckline: 2.5,
     ears: false,
+    headScale: 1.1,
+    face: { scale: 0.36, eyeSpread: 0.102, eyeLift: 0.02, browOffset: 0.075, mouthOffset: 0.14, blush: { dx: 0.135, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 1, lidRest: 0.8 },
+    bangles: [
+      { arm: 0, t: 0.82, color: '#3fa7a0', tube: 0.011 },
+      { arm: 0, t: 0.87, color: '#e9b43c', tube: 0.01 },
+      { arm: 0, t: 0.92, color: '#c79ad8', tube: 0.012 },
+      { arm: 1, t: 0.9, color: '#d9a64a', tube: 0.008 },
+    ],
   },
   man: {
-    head: { c: [0, 2.78, 0], rx: 0.45, ry: 0.53, depth: 0.43, round: 0.2, bulge: 0, backBulge: 0, squircle: 2 },
-    cranium: { c: [0, 2.85, -0.01], r: [0.43, 0.47, 0.44] },
-    jaw: { c: [0, 2.62, 0.04], r: [0.39, 0.3, 0.37] },
-    chin: { c: [0, 2.43, 0.13], r: [0.17, 0.1, 0.14] },
-    nose: { c: [0, 2.68, 0.445], r: [0.052, 0.064, 0.054] },
-    neck: { a: [0, 2.08, -0.01], b: [0, 2.42, -0.02], r: 0.09 },
-    chest: { c: [0, 1.92, 0], r: [0.34, 0.24, 0.2] },
-    waist: { c: [0, 1.6, 0], r: [0.29, 0.28, 0.18] },
-    hips: { c: [0, 1.38, 0], r: [0.29, 0.19, 0.19] },
-    sleeve: { dx: 0.38, y: 1.92, r: [0.12, 0.15, 0.12] },
-    arm: { shoulder: [0.38, 1.98, 0], elbow: [0.48, 1.66, 0.03], hand: [0.52, 1.34, 0.06], r: [0.078, 0.068, 0.06] },
-    mitten: [0.078, 0.1, 0.05],
-    leg: { top: [0.15, 1.3, 0], bottom: [0.16, 0.2, 0.02], r1: 0.15, r2: 0.135 },
-    shoe: { c: [0.165, 0.08, 0.06], r: [0.115, 0.085, 0.18] },
-    waistY: 1.44,
-    hemY: 0.2,
-    neckline: 2.08,
+    head: { c: [0, 2.9, 0], rx: 0.28, ry: 0.33, depth: 0.27, round: 0.12, bulge: 0, backBulge: 0, squircle: 2 },
+    cranium: { c: [0, 2.95, -0.02], r: [0.265, 0.29, 0.28] },
+    jaw: { c: [0, 2.81, 0.02], r: [0.248, 0.2, 0.24] },
+    chin: { c: [0, 2.69, 0.07], r: [0.11, 0.07, 0.09] },
+    nose: { c: [0, 2.845, 0.265], r: [0.03, 0.038, 0.034] },
+    neck: { a: [0, 2.44, -0.01], b: [0, 2.74, -0.02], r: 0.075 },
+    chest: { c: [0, 2.3, 0], r: [0.37, 0.2, 0.2] },
+    waist: { c: [0, 2.02, 0], r: [0.33, 0.26, 0.2] },
+    hips: { c: [0, 1.8, 0], r: [0.3, 0.16, 0.2] },
+    sleeve: { a: [0.34, 2.38, 0], b: [0.45, 2.19, 0.02], r1: 0.1, r2: 0.1 },
+    arm: { shoulder: [0.34, 2.41, 0], elbow: [0.46, 2.09, 0.03], hand: [0.5, 1.76, 0.07], r: [0.06, 0.053, 0.047] },
+    mitten: [0.058, 0.08, 0.034],
+    leg: { top: [0.16, 1.65, 0], bottom: [0.18, 0.26, 0.02], r1: 0.18, r2: 0.155 },
+    shoe: { c: [0.18, 0.07, 0.08], r: [0.1, 0.075, 0.17] },
+    waistY: 1.86,
+    hemY: 0.17,
+    neckline: 2.5,
     ears: true,
+    headScale: 1.1,
+    face: { scale: 0.36, eyeSpread: 0.106, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.14, blush: { dx: 0.14, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 0, lidRest: 0.9 },
+    bangles: [],
   },
 };
 
@@ -83,25 +101,28 @@ export class HumanAnatomy extends Anatomy {
     this.figure = spec.figure ?? 'lady';
     this.def = FIGURES[this.figure];
     const d = this.def;
-    this.head = d.head;
-    this.headCenter = d.head.c;
-    this.neck = [0, 2.34, 0];
-    this.crownPivot = [0, d.head.c[1] + 0.3, -0.05];
+    // Head and hair are sculpted at one size and scaled about the chin.
+    const k = (this.headK = d.headScale ?? 1);
+    this.pivotY = d.neck.b[1] - 0.1;
+    const sy = (y: number) => this.pivotY + (y - this.pivotY) * k;
+    const hd = d.head;
+    this.head = { ...hd, c: [hd.c[0] * k, sy(hd.c[1]), hd.c[2] * k], rx: hd.rx * k, ry: hd.ry * k, depth: hd.depth * k, round: hd.round * k };
+    this.headCenter = this.head.c;
+    const f = d.face;
     this.face = {
-      scale: 0.55,
-      eyeSpread: 0.165,
-      eyeLift: -0.01,
-      browOffset: 0.135,
-      mouthOffset: 0.24,
-      blush: { dx: 0.245, dy: -0.13, rx: 0.07, ry: 0.042 },
+      ...f, scale: f.scale * k, eyeSpread: f.eyeSpread * k, eyeLift: f.eyeLift * k, browOffset: f.browOffset * k, mouthOffset: f.mouthOffset * k,
+      blush: { dx: f.blush.dx * k, dy: f.blush.dy * k, rx: f.blush.rx * k, ry: f.blush.ry * k },
     };
+    this.neck = [0, this.head.c[1] - 0.42, 0];
+    this.crownPivot = [0, this.head.c[1] + this.head.ry * 0.6, -0.05];
+    this.bangles = d.bangles;
     const mirror = (p: V3): V3 => [-p[0], p[1], p[2]];
     this.shoulders = [d.arm.shoulder, mirror(d.arm.shoulder)];
     this.elbows = [d.arm.elbow, mirror(d.arm.elbow)];
     this.hands = [d.arm.hand, mirror(d.arm.hand)];
-    this.bellyCollider = { c: [0, 1.5, 0.02], r: [0.34, 0.6, 0.26] };
+    this.bellyCollider = { c: [0, (d.waistY + d.neckline) / 2, 0.02], r: [0.36, 0.6, 0.26] };
     this.footX = d.shoe.c[0];
-    this.wobbleRange = [2.5, 3.4];
+    this.wobbleRange = [d.neckline + 0.3, this.head.c[1] + 0.7];
     this.setup();
   }
 
@@ -113,14 +134,35 @@ export class HumanAnatomy extends Anatomy {
     const c = this.head.c;
     for (const side of [1, -1] as const) {
       if (this.def?.ears) {
-        this.ears.push(makeLeaf([0.4 * side, c[1] - 0.05, -0.01], [1 * side, 0.15, -0.25], [0.2 * side, 0, 1], 0.12, 0.08, 0.04, 0.1, 0));
+        const k = this.head.rx / 0.45;
+        this.ears.push(makeLeaf([0.4 * k * side, c[1] - 0.05 * k, -0.01 * k], [1 * side, 0.15, -0.25], [0.2 * side, 0, 1], 0.12 * k, 0.08 * k, 0.04 * k, 0.1 * k, 0));
       } else {
         this.ears.push(makeLeaf([0, c[1], 0], [side, 0, 0], [0, 0, 1], 0.01, 0.001, 0.001, 0, 0));
       }
     }
   }
 
+  private headK!: number;
+  private pivotY = 0;
+
+  /** Evaluates a head-space field at the scaled position. */
+  private scaled(hair: boolean, x: number, y: number, z: number) {
+    // The base constructor may sample before our fields are initialised.
+    const k = this.headK ?? 1;
+    const p = this.pivotY ?? 0;
+    const qx = x / k, qy = p + (y - p) / k, qz = z / k;
+    return (hair ? this.rawHair(qx, qy, qz) : this.rawHead(qx, qy, qz)) * k;
+  }
+
   protected headField(x: number, y: number, z: number) {
+    return this.scaled(false, x, y, z);
+  }
+
+  protected crownField(x: number, y: number, z: number) {
+    return this.scaled(true, x, y, z);
+  }
+
+  private rawHead(x: number, y: number, z: number) {
     const d = this.def ?? FIGURES.lady;
     const e = (q: { c: V3; r: V3 }) => sdEllipsoid(x - q.c[0], y - q.c[1], z - q.c[2], q.r[0], q.r[1], q.r[2]);
     let h = e(d.cranium);
@@ -131,26 +173,29 @@ export class HumanAnatomy extends Anatomy {
   }
 
   /** Hair: a single sculpted volume with the face opening carved out. */
-  protected crownField(x: number, y: number, z: number) {
+  private rawHair(x: number, y: number, z: number) {
     const d = this.def;
     if (!d) return 1e3;
     const c = d.head.c;
     if (this.figure === 'lady') {
-      // Chin-length bob: full crown, flaring out at the jaw, framing the face,
-      // with a side-swept fringe that leaves the forehead partly open.
-      let h = sdEllipsoid(x, y - (c[1] + 0.12), z + 0.03, 0.5, 0.5, 0.5);
-      h = smin(h, sdEllipsoid(x, y - (c[1] - 0.2), z + 0.03, 0.53, 0.24, 0.45), 0.12);
-      // Face opening, tilted so the fringe sweeps from one side.
-      const fx = x - 0.05, fy = y - (c[1] - 0.06) - 0.12 * Math.max(0, -x);
-      const faceCut = sdEllipsoid(fx, fy, z - 0.38, 0.35, 0.4, 0.34);
-      h = smax(h, -faceCut, 0.06);
-      // Keep the hair outside the head shell so it reads as volume.
-      h = smax(h, c[1] - 0.42 - y + 0.06 * Math.max(0, z), 0.06);
-      // Swept fringe lock.
-      // It sits proud of the forehead so it reads as hair, not a stain.
-      h = smin(h, sdRoundCone(x, y, z, -0.3, c[1] + 0.33, 0.33, 0.1, c[1] + 0.21, 0.43, 0.09, 0.055), 0.07);
+      // Straight, chin-length bob: a smooth cap on top falling into straight
+      // sides, parted on one side and swept across the forehead.
+      let h = sdEllipsoid(x, y - (c[1] + 0.09), z + 0.02, 0.295, 0.32, 0.3);
+      h = smin(h, sdRoundCone(x, y, z, 0, c[1] + 0.06, -0.03, 0, c[1] - 0.16, -0.045, 0.305, 0.322), 0.06);
+      // Blunt cut just below the chin, the ends tipping in slightly.
+      h = smax(h, c[1] - 0.25 - y + 0.03 * Math.max(0, z), 0.025);
+      // Face opening; its top drops toward the swept side (+x).
+      const fy = y - (c[1] - 0.05) + 0.12 * Math.max(0, x + 0.04);
+      h = smax(h, -sdEllipsoid(x - 0.005, fy, z - 0.25, 0.212, 0.265, 0.2), 0.03);
       return h;
     }
+    // Short crop, sculpted at the old head size (rx 0.45) and scaled to fit.
+    const k = d.head.rx / 0.45;
+    // Lifted a touch so the hairline clears the brows.
+    return this.crop((x - c[0]) / k, c[1] + (y - c[1] - 0.045) / k, (z - c[2]) / k, c) * k;
+  }
+
+  private crop(x: number, y: number, z: number, c: V3) {
     // Short crop: tight at the sides and back, with volume and a quiff on top.
     let h = sdEllipsoid(x, y - (c[1] + 0.13), z + 0.01, 0.465, 0.42, 0.475);
     const faceCut = sdEllipsoid(x, y - (c[1] - 0.15), z - 0.32, 0.44, 0.4, 0.34);
@@ -186,8 +231,8 @@ export class HumanAnatomy extends Anatomy {
     const side = Math.sign(s[0]);
     let a = sdRoundCone(x, y, z, s[0], s[1], s[2], el[0], el[1], el[2], r0, r1);
     a = smin(a, sdRoundCone(x, y, z, el[0], el[1], el[2], h[0], h[1], h[2], r1, r2), 0.025);
-    // Puffed sleeve rides with the upper arm.
-    a = smin(a, sdEllipsoid(x - d.sleeve.dx * side, y - d.sleeve.y, z, d.sleeve.r[0], d.sleeve.r[1], d.sleeve.r[2]), 0.05);
+    // Loose sleeve rides with the upper arm.
+    a = smin(a, this.sleeveField(x, y, z, side), 0.04);
     // Mitten hand with a small thumb.
     const m = d.mitten;
     a = smin(a, sdEllipsoid(x - h[0] - 0.008 * side, y - h[1] + 0.07, z - h[2], m[0], m[1], m[2]), 0.03);
@@ -195,17 +240,27 @@ export class HumanAnatomy extends Anatomy {
     return a;
   }
 
+  armRadiusAt(_arm: 0 | 1, t: number) {
+    const r = this.def.arm.r;
+    return r[1] + (r[2] - r[1]) * t;
+  }
+
+  private sleeveField(x: number, y: number, z: number, side: number) {
+    const s = this.def.sleeve;
+    return sdRoundCone(x * side, y, z, s.a[0], s.a[1], s.a[2], s.b[0], s.b[1], s.b[2], s.r1, s.r2);
+  }
+
+
   regions(x: number, y: number, z: number, w: Float32Array, out: Float32Array) {
     const d = this.def;
-    const ax = Math.abs(x);
+    // Arm skin inside (or on) the sleeve is shirt; above the sleeve end too,
+    // so the shoulder never shows skin.
     const sl = d.sleeve;
-    const sleeveE = Math.sqrt(((ax - sl.dx) / sl.r[0]) ** 2 + ((y - sl.y) / sl.r[1]) ** 2 + (z / sl.r[2]) ** 2);
-    // Everything on the arm above the sleeve hem is shirt, so the shoulder never shows skin.
-    const hem = sl.y - sl.r[1] * 0.8;
-    const sleeve = Math.max(1 - sstep(1.0, 1.12, sleeveE), sstep(hem - 0.01, hem + 0.01, y));
+    const sleeve = Math.max(1 - sstep(0.004, 0.014, this.sleeveField(x, y, z, x >= 0 ? 1 : -1)), sstep(sl.b[1] + 0.02, sl.b[1] + 0.06, y));
     const body = w[PART.body];
     const arm = w[PART.armL] + w[PART.armR];
-    out[0] = w[PART.crown];
+    // Crisp hairline: the blend weight is soft, the colour edge should not be.
+    out[0] = sstep(0.3, 0.7, w[PART.crown]);
     out[1] = body * sstep(d.waistY - 0.02, d.waistY + 0.02, y) * (1 - sstep(d.neckline - 0.02, d.neckline + 0.02, y)) + arm * sleeve;
     out[2] = body * (1 - sstep(d.waistY - 0.02, d.waistY + 0.02, y)) * sstep(d.hemY - 0.02, d.hemY + 0.01, y);
     out[3] = body * (1 - sstep(d.hemY - 0.02, d.hemY + 0.01, y));
@@ -216,10 +271,10 @@ export class HumanAnatomy extends Anatomy {
     const d = this.def;
     if (!d) return super.computeBounds();
     super.computeBounds();
-    const c = d.head.c;
-    this.partBounds[PART.body] = [0, 1.15, 0, 1.25];
-    this.partBounds[PART.head] = [c[0], c[1], c[2], 0.65];
-    this.partBounds[PART.crown] = [0, c[1] + 0.05, -0.02, 0.72];
+    const c = this.head.c;
+    this.partBounds[PART.body] = [0, d.neckline / 2, 0, d.neckline / 2 + 0.2];
+    this.partBounds[PART.head] = [c[0], c[1], c[2], this.head.ry * 1.25];
+    this.partBounds[PART.crown] = [0, c[1] + 0.05, -0.02, this.head.ry * 1.4];
     for (const i of [0, 1] as const) {
       const s = this.shoulders[i], h = this.hands[i];
       this.partBounds[PART.armL + i] = [(s[0] + h[0]) / 2, (s[1] + h[1]) / 2, 0.03, 0.42];

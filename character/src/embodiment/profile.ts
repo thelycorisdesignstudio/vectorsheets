@@ -101,7 +101,7 @@ export const MIRA_PROFILE: CharacterProfile = {
   },
   appearance: {
     kind: 'human', figure: 'lady', palette: 'mira', head: 'puck', crown: 'fronds', ears: 'none',
-    eyeShape: 'oval', browShape: 'arched', accessories: [],
+    eyeShape: 'almond', browShape: 'arched', accessories: [],
   },
   behaviour: {
     ...ORU_PROFILE.behaviour,

@@ -32,6 +32,14 @@ export interface AnatomySpec {
   figure?: 'lady' | 'man';
 }
 
+/** A bangle worn on a forearm: arm index, position along elbow→hand (0..1), colour, tube radius. */
+export interface Bangle {
+  arm: 0 | 1;
+  t: number;
+  color: string;
+  tube: number;
+}
+
 export interface HeadDef {
   c: V3;
   rx: number;
@@ -81,6 +89,10 @@ export interface FaceLayout {
   /** mouth distance below the head centre */
   mouthOffset: number;
   blush: { dx: number; dy: number; rx: number; ry: number };
+  /** strength of a drawn upper lash line (0 = none) */
+  liner?: number;
+  /** resting openness of the upper lids (1 = fully open) */
+  lidRest?: number;
 }
 
 export class Anatomy {
@@ -100,6 +112,8 @@ export class Anatomy {
   /** model-space height range that jiggles like soft jelly */
   wobbleRange: [number, number] = [1.5, 3.1];
   lobes: Lobe[] = [];
+  /** bangles on the forearms (separate rings, coloured individually) */
+  bangles: Bangle[] = [];
   ears: Leaf[] = [];
   eyes: EyeLandmark[] = [];
   /** Eye ellipse half-size on the face plane */
@@ -371,6 +385,11 @@ export class Anatomy {
       if (t > 5) return null;
     }
     return null;
+  }
+
+  /** Forearm radius at fraction t from elbow to hand (used to fit bangles). */
+  armRadiusAt(_arm: 0 | 1, t: number) {
+    return 0.135 + (0.128 - 0.135) * t;
   }
 
   /** Antenna base points (crown 'antennae'). */

@@ -164,7 +164,7 @@ export default function App() {
   return (
     <main className={`app ${presentation ? 'presenting' : ''} ${studio ? 'with-studio' : ''}`}>
       <div className="viewport">
-        <Stage view={view} orbit={!presentation || studio} focus={engaged && !anim.reducedMotion ? 1 : 0} headY={appearance.kind === 'human' ? 2.77 : 1.86}>
+        <Stage view={view} orbit={!presentation || studio} focus={engaged && !anim.reducedMotion ? 1 : 0} headY={appearance.kind === 'human' ? (appearance.figure === 'lady' ? 2.88 : 2.93) : 1.86}>
           <AlienCharacter
             controller={platform.anim}
             expression={anim.expression === 'auto' ? undefined : anim.expression}

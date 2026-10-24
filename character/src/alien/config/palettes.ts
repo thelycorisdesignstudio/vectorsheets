@@ -86,7 +86,7 @@ export const PALETTES: Record<PaletteName, Palette> = {
     tip: '#ff5b37',
     shadow: '#d07c5d',
     blush: '#f0857a',
-    brow: '#c1401f',
+    brow: '#8a2e1a',
     sclera: '#ffffff',
     pupil: '#3a2621',
     lip: '#c25a4a',
@@ -96,7 +96,7 @@ export const PALETTES: Record<PaletteName, Palette> = {
     collarA: '#f2d16b',
     collarB: '#e9b84e',
     glow: '#ffffff',
-    regions: { hair: '#ff5a33', shirt: '#eceae4', pants: '#26487f', shoes: '#3b2723' },
+    regions: { hair: '#ff6440', shirt: '#e9e6df', pants: '#1f3d66', shoes: '#3b2723' },
   },
   theo: {
     label: 'Theo',
