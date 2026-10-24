@@ -523,7 +523,7 @@ export class HumanAnatomy extends Anatomy {
     const arm = w[PART.armL] + w[PART.armR];
     // Hair wherever the hair surface is the outermost one: exact and crisp even
     // for thin styles, where the soft skinning weights would blur into skin.
-    out[0] = w[PART.body] + arm > 0.6 ? 0 : 1 - sstep(-0.003, 0.003, this.crownField(x, y, z) - this.headField(x, y, z) + 0.004);
+    out[0] = w[PART.body] + arm > 0.6 ? 0 : 1 - sstep(-0.007, 0.007, this.crownField(x, y, z) - this.headField(x, y, z) + 0.006);
     // Top: below the neckline (plus straps over the shoulders) and above its hem.
     let upper = 1 - sstep(o.shirtTop - 0.02, o.shirtTop + 0.02, y);
     if (o.strap) {

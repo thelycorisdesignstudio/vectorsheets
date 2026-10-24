@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  BEHAVIOURS, BROW_LABELS, EXPRESSION_LABELS, EYE_SHAPES, PALETTES, REACTIONS, STATES, STATE_ORDER, ANIMATION_STYLES,
+  BEHAVIOURS, BROW_LABELS, LIGHT_RIG, EXPRESSION_LABELS, EYE_SHAPES, PALETTES, REACTIONS, STATES, STATE_ORDER, ANIMATION_STYLES,
   textToTimeline,
   type Accessory, type AnimationStyle, type Behaviour, type BrowShape, type CrownFeature, type EarStyle,
   type ExpressionName, type EyeShape, type HairStyle, type HeadShape, type Outfit, type PaletteName, type ReactionKind,
@@ -45,6 +45,22 @@ const EVENTS: EmbodimentEvent['type'][] = [
   'CHARACTER_GREETING', 'USER_STARTED_SPEAKING', 'USER_FINISHED_SPEAKING', 'AI_STARTED_THINKING',
   'AI_STARTED_SPEAKING', 'AI_FINISHED_SPEAKING', 'USER_INTERRUPTED', 'CONVERSATION_ENDED',
 ];
+
+/** Toggles the hand-drawn (illustrated) look for every character at once. */
+function RenderStyle() {
+  const [on, setOn] = useState(LIGHT_RIG.uIllustrate.value > 0.5);
+  const set = (v: boolean) => {
+    LIGHT_RIG.uIllustrate.value = v ? 1 : 0;
+    document.documentElement.classList.toggle('illustrated', v);
+    setOn(v);
+  };
+  return (
+    <div className="seg">
+      <button className={on ? 'on' : ''} onClick={() => set(true)}>Illustrated</button>
+      <button className={!on ? 'on' : ''} onClick={() => set(false)}>Soft 3D</button>
+    </div>
+  );
+}
 
 function Chips<T extends string>({ value, options, onChange }: { value?: T; options: Record<T, string>; onChange: (v: T) => void }) {
   return (
@@ -240,6 +256,9 @@ export function StudioPanel({ platform, appearance, setAppearance, anim, setAnim
       )}
       {tab === 'look' && (
         <>
+          <Section title="Render">
+            <RenderStyle />
+          </Section>
           <Section title="Palette">
             <div className="swatches">
               {(Object.keys(PALETTES) as PaletteName[]).filter((k) => !!PALETTES[k].regions === (appearance.kind === 'human')).map((k) => {

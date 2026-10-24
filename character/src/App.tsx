@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { AlienCharacter, PALETTES } from './alien';
+import { AlienCharacter, LIGHT_RIG, PALETTES } from './alien';
 import { Stage, type CameraView } from './scene/Stage';
 import { ConversationDock } from './ui/ConversationDock';
 import { Diagnostics } from './ui/Diagnostics';
@@ -15,6 +15,9 @@ const appearanceOf = (p: CharacterProfile): Appearance => ({ ...p.appearance, ac
 
 function readParams() {
   const q = new URLSearchParams(location.search);
+  // Render style: illustrated (hand-drawn) by default, ?render=soft for the soft 3D look.
+  LIGHT_RIG.uIllustrate.value = q.get('render') === 'soft' ? 0 : 1;
+  document.documentElement.classList.toggle('illustrated', q.get('render') !== 'soft');
   return {
     present: q.has('present'),
     studio: q.has('dev') || q.has('studio'),
