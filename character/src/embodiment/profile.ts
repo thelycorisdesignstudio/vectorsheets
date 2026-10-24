@@ -1,6 +1,6 @@
 import type { GazeProfile } from '../alien/animation/gaze';
 import type {
-  Accessory, AnimationStyle, Behaviour, BrowShape, CrownFeature, EarStyle, ExpressionName, EyeShape, HeadShape, PaletteName,
+  Accessory, AnimationStyle, Behaviour, BrowShape, CharacterKind, CrownFeature, EarStyle, ExpressionName, EyeShape, HeadShape, HumanFigure, PaletteName,
 } from '../alien/types';
 
 /**
@@ -20,6 +20,8 @@ export interface CharacterProfile {
     voice: { rate: number; pitch: number; preferredVoices: string[] };
   };
   appearance: {
+    kind?: CharacterKind;
+    figure?: HumanFigure;
     palette: PaletteName;
     head: HeadShape;
     crown: CrownFeature;
@@ -82,3 +84,56 @@ export const ORU_PROFILE: CharacterProfile = {
     restAfter: 60,
   },
 };
+
+const HUMAN_EXPRESSIONS: ExpressionName[] = ORU_PROFILE.behaviour.approvedExpressions;
+
+/** Mira: warm, quick to smile, a little playful. */
+export const MIRA_PROFILE: CharacterProfile = {
+  id: 'mira',
+  name: 'Mira',
+  tagline: 'Warm, curious and always up for a chat.',
+  persona: {
+    summary:
+      'Mira is a warm, upbeat companion character. She is curious about people, quick to smile, gently playful, ' +
+      'and honest that she is an AI character rather than a real person.',
+    style: 'Reply in one to three short spoken sentences. Friendly and natural. No lists, no markdown, no emoji.',
+    voice: { rate: 1.03, pitch: 1.1, preferredVoices: ['Samantha', 'Google UK English Female', 'Microsoft Aria', 'Karen'] },
+  },
+  appearance: {
+    kind: 'human', figure: 'lady', palette: 'mira', head: 'puck', crown: 'fronds', ears: 'none',
+    eyeShape: 'oval', browShape: 'arched', accessories: [],
+  },
+  behaviour: {
+    ...ORU_PROFILE.behaviour,
+    defaultBehaviour: 'attentive',
+    approvedExpressions: HUMAN_EXPRESSIONS,
+    gaze: { eyeContact: 0.8, pointerInterest: 0.45, glanceRate: 5 },
+  },
+};
+
+/** Theo: calm, thoughtful, dry sense of humour. */
+export const THEO_PROFILE: CharacterProfile = {
+  id: 'theo',
+  name: 'Theo',
+  tagline: 'Easygoing, thoughtful and a good listener.',
+  persona: {
+    summary:
+      'Theo is a calm, thoughtful companion character with a dry, kind sense of humour. He listens closely, asks good ' +
+      'questions, and is honest that he is an AI character rather than a real person.',
+    style: 'Reply in one to three short spoken sentences. Relaxed and clear. No lists, no markdown, no emoji.',
+    voice: { rate: 1, pitch: 0.92, preferredVoices: ['Daniel', 'Google UK English Male', 'Microsoft Guy', 'Alex'] },
+  },
+  appearance: {
+    kind: 'human', figure: 'man', palette: 'theo', head: 'puck', crown: 'fronds', ears: 'none',
+    eyeShape: 'oval', browShape: 'pill', accessories: [],
+  },
+  behaviour: {
+    ...ORU_PROFILE.behaviour,
+    defaultBehaviour: 'calm',
+    approvedExpressions: HUMAN_EXPRESSIONS,
+    gaze: { eyeContact: 0.75, pointerInterest: 0.4, glanceRate: 4 },
+  },
+};
+
+export const PROFILES = { oru: ORU_PROFILE, mira: MIRA_PROFILE, theo: THEO_PROFILE } as const;
+export type CharacterId = keyof typeof PROFILES;

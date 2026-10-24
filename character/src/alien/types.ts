@@ -39,7 +39,11 @@ export type ExpressionName =
   | 'determined'
   | 'confused';
 
-export type PaletteName = 'grape' | 'tangerine' | 'mint' | 'bubblegum' | 'lagoon';
+export type PaletteName = 'grape' | 'tangerine' | 'mint' | 'bubblegum' | 'lagoon' | 'mira' | 'theo';
+
+/** Which character body to build. */
+export type CharacterKind = 'alien' | 'human';
+export type HumanFigure = 'lady' | 'man';
 export type EyeShape = 'oval' | 'round' | 'almond' | 'droplet';
 export type BrowShape = 'pill' | 'arched' | 'tuft' | 'dots' | 'none';
 export type HeadShape = 'puck' | 'pebble' | 'bun';
@@ -136,6 +140,8 @@ export interface Palette {
   collarB: string;
   /** Antenna bulbs / glow details */
   glow: string;
+  /** Clothed characters: colours for hair and clothing regions */
+  regions?: { hair: string; shirt: string; pants: string; shoes: string };
 }
 
 export interface CharacterAppearance {

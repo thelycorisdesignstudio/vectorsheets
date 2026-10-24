@@ -72,6 +72,12 @@ export class ConversationManager {
     this.changed();
   }
 
+  /** Switch to another character's persona (voice, briefing). */
+  setProfile(profile: CharacterProfile) {
+    this.deps.profile = profile;
+    this.changed();
+  }
+
   setBargeIn(on: boolean) {
     this.bargeIn = on;
     this.changed();

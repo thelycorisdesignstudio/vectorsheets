@@ -38,7 +38,7 @@ function getWorker(): Worker | null {
 }
 
 export const anatomyKey = (spec: AnatomySpec, quality: RenderQuality) =>
-  `${spec.head}|${spec.ears}|${spec.crown}|${quality}`;
+  `${spec.kind ?? 'alien'}|${spec.figure ?? ''}|${spec.head}|${spec.ears}|${spec.crown}|${quality}`;
 
 export function requestBodyMesh(spec: AnatomySpec, quality: RenderQuality): Promise<BodyMeshData> {
   const key = anatomyKey(spec, quality);

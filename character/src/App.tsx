@@ -7,8 +7,10 @@ import { Diagnostics } from './ui/Diagnostics';
 import { StudioPanel, type AnimSettings, type Appearance } from './ui/StudioPanel';
 import { defaultQuality, hasWebGL } from './lib/webgl';
 import { createPlatform, type Platform } from './platform/createPlatform';
-import { ORU_PROFILE } from './embodiment/profile';
+import { PROFILES, type CharacterId, type CharacterProfile } from './embodiment/profile';
 import { ErrorBoundary } from './ui/ErrorBoundary';
+
+const appearanceOf = (p: CharacterProfile): Appearance => ({ ...p.appearance, accessories: [...p.appearance.accessories] });
 
 function readParams() {
   const q = new URLSearchParams(location.search);
@@ -33,7 +35,12 @@ export default function App() {
   const params = useMemo(readParams, []);
   const [webgl] = useState(hasWebGL);
   const [quality] = useState(defaultQuality);
-  const platform = useMemo(() => createPlatform(ORU_PROFILE), []);
+  const [characterId, setCharacterId] = useState<CharacterId>(() => {
+    const c = params.q.get('character') as CharacterId | null;
+    return c && c in PROFILES ? c : 'oru';
+  });
+  const profile = PROFILES[characterId];
+  const platform = useMemo(() => createPlatform(PROFILES[characterId]), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [presentation, setPresentation] = useState(params.present);
   const [studio, setStudio] = useState(params.studio && !params.present);
   const [paused, setPaused] = useState(false);
@@ -48,8 +55,10 @@ export default function App() {
   const [failed, setFailed] = useState<string | null>(null);
   const [appearance, setAppearanceState] = useState<Appearance>(() => {
     const q = params.q;
-    const a = ORU_PROFILE.appearance;
+    const a = profile.appearance;
     return {
+      kind: a.kind,
+      figure: a.figure,
       palette: (q.get('palette') as Appearance['palette']) || a.palette,
       eyeShape: (q.get('eyes') as Appearance['eyeShape']) || a.eyeShape,
       browShape: (q.get('brows') as Appearance['browShape']) || a.browShape,
@@ -60,9 +69,9 @@ export default function App() {
     };
   });
   const [anim, setAnimState] = useState<AnimSettings>(() => ({
-    style: ORU_PROFILE.behaviour.animationStyle,
-    intensity: ORU_PROFILE.behaviour.movementIntensity,
-    gesture: ORU_PROFILE.behaviour.speakingGestureIntensity,
+    style: profile.behaviour.animationStyle,
+    intensity: profile.behaviour.movementIntensity,
+    gesture: profile.behaviour.speakingGestureIntensity,
     blinking: !params.still,
     tracking: !params.still,
     reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -90,8 +99,23 @@ export default function App() {
   }, [platform]);
 
   useEffect(() => {
-    if (ready && ORU_PROFILE.behaviour.greeting.onLoad && !params.still) platform.conversation.greet();
+    if (ready && profile.behaviour.greeting.onLoad && !params.still) platform.conversation.greet();
   }, [ready, platform, params.still]);
+
+  // Switching character: new body, persona and a fresh conversation.
+  const firstCharacter = useRef(characterId);
+  useEffect(() => {
+    if (firstCharacter.current === characterId) return;
+    firstCharacter.current = characterId;
+    const p = PROFILES[characterId];
+    platform.setProfile(p);
+    platform.conversation.reset();
+    setAppearanceState(appearanceOf(p));
+    setReady(false);
+    const url = new URL(location.href);
+    url.searchParams.set('character', characterId);
+    history.replaceState(null, '', url);
+  }, [characterId, platform]);
 
   // Activity keeps the character awake; throttled to a few calls a second.
   useEffect(() => {
@@ -130,7 +154,7 @@ export default function App() {
             <span className="fb-eye" />
             <span className="fb-eye" />
           </div>
-          <h1>{ORU_PROFILE.name} needs 3D graphics</h1>
+          <h1>{profile.name} needs 3D graphics</h1>
           <p>Your browser or device has WebGL turned off. Try a recent version of Chrome, Safari, Firefox or Edge with hardware acceleration enabled.</p>
         </div>
       </main>
@@ -140,7 +164,7 @@ export default function App() {
   return (
     <main className={`app ${presentation ? 'presenting' : ''} ${studio ? 'with-studio' : ''}`}>
       <div className="viewport">
-        <Stage view={view} orbit={!presentation || studio} focus={engaged && !anim.reducedMotion ? 1 : 0}>
+        <Stage view={view} orbit={!presentation || studio} focus={engaged && !anim.reducedMotion ? 1 : 0} headY={appearance.kind === 'human' ? 2.77 : 1.86}>
           <AlienCharacter
             controller={platform.anim}
             expression={anim.expression === 'auto' ? undefined : anim.expression}
@@ -159,13 +183,22 @@ export default function App() {
           />
           <EmbodimentTicker platform={platform} paused={paused} />
         </Stage>
-        {!ready && !failed && <div className="loading">Waking {ORU_PROFILE.name}…</div>}
+        {!ready && !failed && <div className="loading">Waking {profile.name}…</div>}
         {failed && <div className="loading error">Something went wrong: {failed}</div>}
       </div>
 
       <header className="brand">
-        <h1>{ORU_PROFILE.name}</h1>
-        <p>{ORU_PROFILE.tagline}</p>
+        <h1>{profile.name}</h1>
+        <p>{profile.tagline}</p>
+        {!presentation && (
+          <nav className="cast" aria-label="Choose a character">
+            {(Object.keys(PROFILES) as CharacterId[]).map((id) => (
+              <button key={id} className={id === characterId ? 'on' : ''} aria-pressed={id === characterId} onClick={() => setCharacterId(id)}>
+                {PROFILES[id].name}
+              </button>
+            ))}
+          </nav>
+        )}
       </header>
 
       <div className="top-actions">
@@ -181,7 +214,7 @@ export default function App() {
 
       {!params.still && (
         <ErrorBoundary label="conversation">
-          <ConversationDock conversation={platform.conversation} name={ORU_PROFILE.name} onFirstGesture={firstGesture} />
+          <ConversationDock conversation={platform.conversation} name={profile.name} onFirstGesture={firstGesture} />
         </ErrorBoundary>
       )}
 

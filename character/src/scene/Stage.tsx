@@ -24,6 +24,8 @@ interface StageProps {
   orbit: boolean;
   /** 0 = full body, 1 = conversational close-up */
   focus?: number;
+  /** height of the character's head centre (framing adapts per character) */
+  headY?: number;
 }
 
 /** Distance multiplier so the whole character fits narrow (portrait) screens. */
@@ -39,7 +41,7 @@ function fitScale(aspect: number) {
  * camera operator — and back out when it ends. Manual orbiting takes over
  * until the next view or focus change.
  */
-function CameraRig({ view, focus, controls }: { view: CameraView; focus: number; controls: React.RefObject<OrbitControlsImpl | null> }) {
+function CameraRig({ view, focus, headY, controls }: { view: CameraView; focus: number; headY: number; controls: React.RefObject<OrbitControlsImpl | null> }) {
   const { camera, size } = useThree();
   const goal = useRef(new THREE.Vector3());
   const target = useRef(new THREE.Vector3());
@@ -50,15 +52,21 @@ function CameraRig({ view, focus, controls }: { view: CameraView; focus: number;
     fast.current = true;
   }, [view]);
   useEffect(() => {
-    const v = VIEWS[view];
+    const v0 = VIEWS[view];
+    // Face-led shots follow the head; full-body shots move a little with it.
+    const dy = (headY - 1.86) * (view === 'hero' || view === 'close' ? 1 : 0.25);
+    const v = {
+      position: [v0.position[0], v0.position[1] + dy, v0.position[2]] as Vec,
+      target: [v0.target[0], v0.target[1] + dy, v0.target[2]] as Vec,
+    };
     const k = view === 'close' || view === 'hero' ? Math.min(fitScale(aspect) * (view === 'hero' ? 0.82 : 1), 1.3) : fitScale(aspect);
     const f = view === 'close' || view === 'hero' ? 0 : focus;
     // Conversation framing: closer, aimed at the face.
-    target.current.set(v.target[0], v.target[1] + (1.72 - v.target[1]) * f, v.target[2]);
+    target.current.set(v.target[0], v.target[1] + (1.72 + (headY - 1.86) - v.target[1]) * f, v.target[2]);
     const dist = k * (1 - 0.24 * f);
     goal.current.set(...v.position).sub(new THREE.Vector3(...v.target)).multiplyScalar(dist).add(target.current);
     animating.current = true;
-  }, [view, aspect, focus]);
+  }, [view, aspect, focus, headY]);
   useFrame((_, dt) => {
     if (!animating.current) return;
     // Preset changes move briskly; conversational lean-ins drift in gently.
@@ -87,7 +95,7 @@ function CameraRig({ view, focus, controls }: { view: CameraView; focus: number;
  * Lighting and the ground shadow belong to the character itself (stylised
  * shaders + blob shadow), so the stage stays clean and fast.
  */
-export function Stage({ children, view, orbit, focus = 0 }: StageProps) {
+export function Stage({ children, view, orbit, focus = 0, headY = 1.86 }: StageProps) {
   const controls = useRef<OrbitControlsImpl | null>(null);
   // Start at the device ratio (capped at 2) and step down if frames drop.
   const maxDpr = Math.min(2, window.devicePixelRatio || 1);
@@ -114,7 +122,7 @@ export function Stage({ children, view, orbit, focus = 0 }: StageProps) {
         minPolarAngle={0.35}
         maxPolarAngle={Math.PI / 2 - 0.02}
       />
-      <CameraRig view={view} focus={focus} controls={controls} />
+      <CameraRig view={view} focus={focus} headY={headY} controls={controls} />
     </Canvas>
   );
 }

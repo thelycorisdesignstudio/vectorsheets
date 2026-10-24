@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Anatomy, LOBE_BONE_BASE, MAX_LOBES, type AnatomySpec } from '../geometry/anatomy';
+import { createAnatomy } from '../geometry/figures';
 import type { BodyMeshData } from '../geometry/bodyMesh';
 import type { V3 } from '../geometry/sdf';
 import { roundedProfile, sweptTube } from '../geometry/tube';
@@ -121,13 +122,14 @@ export class AlienRig {
   private footMat: THREE.MeshBasicMaterial;
 
   constructor(spec: AnatomySpec, data: BodyMeshData, palette: Palette) {
-    this.anatomy = new Anatomy(spec);
+    this.anatomy = createAnatomy(spec);
     const a = this.anatomy;
     this.neck = v3(a.neck);
     this.root.name = 'Character';
     this.root.add(this.mover);
 
     this.skinMat = createToonMaterial({ masks: true });
+    this.skinMat.uniforms.uWobbleRange.value.set(...this.anatomy.wobbleRange);
     this.antennaMat = createToonMaterial({ gradient: [0, 0.3] });
     this.mouthMat = createMouthMaterial(palette);
     this.disposables.push(this.skinMat, this.antennaMat, this.mouthMat, this.colliderMat, this.glowTex, this.eyeGeo);
@@ -175,6 +177,7 @@ export class AlienRig {
     geo.setAttribute('skinWeight', new THREE.BufferAttribute(data.skinWeight, 4));
     geo.setAttribute('aMask', new THREE.BufferAttribute(data.masks, 4));
     geo.setAttribute('aAO', new THREE.BufferAttribute(data.ao, 1));
+    geo.setAttribute('aRegion', new THREE.BufferAttribute(data.regions, 4));
     geo.setIndex(new THREE.BufferAttribute(data.indices, 1));
     geo.computeBoundingSphere();
     this.disposables.push(geo);
@@ -201,10 +204,10 @@ export class AlienRig {
     this.footMat = new THREE.MeshBasicMaterial({ map: this.glowTex, transparent: true, depthWrite: false, opacity: 0.4, toneMapped: false });
     for (const side of [1, -1]) {
       const f = new THREE.Mesh(shadowGeo, this.footMat);
-      f.position.set(0.165 * side, 0.003, 0.07);
+      f.position.set(a.footX * side, 0.003, 0.07);
       f.scale.set(0.34, 1, 0.4);
       f.renderOrder = -1;
-      f.userData.x = 0.165 * side;
+      f.userData.x = a.footX * side;
       this.root.add(f);
       this.feet.push(f);
     }
@@ -245,7 +248,7 @@ export class AlienRig {
     const a = this.anatomy;
     for (const lm of a.eyes) {
       const c = lm.center;
-      const hit = a.raycast([c[0] + lm.side * 0.014, c[1] + 0.232, 2], [0, 0, -1]);
+      const hit = a.raycast([c[0] + lm.side * 0.014 * a.face.scale, c[1] + a.face.browOffset, 2], [0, 0, -1]);
       const p = hit ? hit.p : ([c[0], c[1] + 0.2, c[2]] as V3);
       const n = hit ? v3(hit.n) : new THREE.Vector3(0, 0, 1);
       const anchor = new THREE.Group();
@@ -264,12 +267,15 @@ export class AlienRig {
 
   private sampleMouthPatch() {
     const a = this.anatomy;
-    const yc = a.head.c[1] - 0.165;
+    const yc = a.head.c[1] - a.face.mouthOffset;
+    // The patch spans the face in the character's own scale, while the mouth is
+    // shaped in Oru-scale units: the lookup maps one onto the other.
+    const fs = a.face.scale;
     const patch = new Float32Array(PATCH_X * PATCH_Y * 6);
     for (let j = 0; j < PATCH_Y; j++) {
       for (let i = 0; i < PATCH_X; i++) {
-        const x = -PATCH_W + (2 * PATCH_W * i) / (PATCH_X - 1);
-        const y = yc + PATCH_Y0 + ((PATCH_Y1 - PATCH_Y0) * j) / (PATCH_Y - 1);
+        const x = (-PATCH_W + (2 * PATCH_W * i) / (PATCH_X - 1)) * fs;
+        const y = yc + (PATCH_Y0 + ((PATCH_Y1 - PATCH_Y0) * j) / (PATCH_Y - 1)) * fs;
         const hit = a.raycast([x, y, 2], [0, 0, -1]);
         const o = (j * PATCH_X + i) * 6;
         const p = hit ? hit.p : ([x, y, 0.3] as V3);
@@ -410,7 +416,8 @@ export class AlienRig {
     const h = a.head;
     make('head', this.head, this.toHead(h.c), new THREE.Vector3(h.rx + 0.03, h.ry + 0.03, h.depth + 0.1));
     if (a.lobes.length) make('antenna', this.crown, new THREE.Vector3(0, 0.22, 0), new THREE.Vector3(h.rx * 0.95, 0.34, 0.22));
-    make('belly', this.hips, new THREE.Vector3(0, 0.55, 0.02), new THREE.Vector3(0.36, 0.42, 0.3));
+    const bc = a.bellyCollider;
+    make('belly', this.hips, v3(bc.c), v3(bc.r));
     if (a.spec.ears !== 'none') {
       [this.earL, this.earR].forEach((bone, i) => {
         const L = a.ears[i];
@@ -433,6 +440,12 @@ export class AlienRig {
     u.uTip.value.set(p.tip);
     u.uBlush.value.set(p.blush);
     shadowMultiplier(p.shadow, p.base, u.uShadowMul.value);
+    if (p.regions) {
+      u.uHair.value.set(p.regions.hair);
+      u.uShirt.value.set(p.regions.shirt);
+      u.uPants.value.set(p.regions.pants);
+      u.uShoes.value.set(p.regions.shoes);
+    }
     for (const b of this.brows) {
       const bu = b.mat.uniforms;
       bu.uColor.value.set(p.brow);
@@ -464,9 +477,10 @@ export class AlienRig {
 
   setEyeShape(shape: EyeShape) {
     this.eyeShape = shape;
-    const [sx, sy] = EYE_SHAPES[shape].size;
+    const fs = this.anatomy.face.scale;
+    const [sx, sy] = EYE_SHAPES[shape].size.map((v) => v * fs);
     for (const e of this.eyes) {
-      e.mesh.scale.set(sx, sy, 0.034);
+      e.mesh.scale.set(sx, sy, 0.034 * fs);
       e.mat.uniforms.uAspect.value = sy / sx;
     }
   }
@@ -482,6 +496,8 @@ export class AlienRig {
       }
       if (!base) continue;
       const geo = base.clone();
+      const fs = this.anatomy.face.scale;
+      geo.scale(fs, fs, fs);
       if (b.side < 0) {
         geo.scale(-1, 1, 1);
         // Mirroring flips the winding; restore it so the brow stays solid.
@@ -495,7 +511,7 @@ export class AlienRig {
         index.needsUpdate = true;
       }
       b.mesh = new THREE.Mesh(geo, b.mat);
-      b.mat.uniforms.uBrowHalf.value = BROW_HALF[shape];
+      b.mat.uniforms.uBrowHalf.value = BROW_HALF[shape] * this.anatomy.face.scale;
       b.anchor.add(b.mesh);
     }
     base?.dispose();
@@ -668,9 +684,9 @@ export class AlienRig {
   }
 
   private updateBrows(f: Pose['face']) {
-    const scale = BROW_HALF[this.browShape] / 0.11;
+    const scale = (BROW_HALF[this.browShape] / 0.11) * this.anatomy.face.scale;
     for (const b of this.brows) {
-      const raise = clamp(f.browRaise, -0.6, 1.3) * 0.044 + clamp(f.browAsym, -1.2, 1.2) * b.side * 0.026;
+      const raise = (clamp(f.browRaise, -0.6, 1.3) * 0.044 + clamp(f.browAsym, -1.2, 1.2) * b.side * 0.026) * this.anatomy.face.scale;
       const tilt = clamp(f.browTilt, -1.2, 1.2);
       b.anchor.position.copy(b.base).addScaledVector(b.up, raise);
       const u = b.mat.uniforms;

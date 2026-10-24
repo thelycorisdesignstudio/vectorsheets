@@ -10,6 +10,8 @@ import type { Platform } from '../platform/createPlatform';
 import type { CameraView } from '../scene/Stage';
 
 export interface Appearance {
+  kind?: 'alien' | 'human';
+  figure?: 'lady' | 'man';
   palette: PaletteName;
   eyeShape: EyeShape;
   browShape: BrowShape;
@@ -235,7 +237,7 @@ export function StudioPanel({ platform, appearance, setAppearance, anim, setAnim
         <>
           <Section title="Palette">
             <div className="swatches">
-              {(Object.keys(PALETTES) as PaletteName[]).map((k) => {
+              {(Object.keys(PALETTES) as PaletteName[]).filter((k) => !!PALETTES[k].regions === (appearance.kind === 'human')).map((k) => {
                 const p = PALETTES[k];
                 return (
                   <button

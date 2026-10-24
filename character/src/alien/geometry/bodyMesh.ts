@@ -1,4 +1,5 @@
-import { Anatomy, type AnatomySpec, BONE, LOBE_BONE_BASE, MAX_LOBES, PART, PART_COUNT } from './anatomy';
+import { type AnatomySpec, BONE, LOBE_BONE_BASE, MAX_LOBES, PART, PART_COUNT } from './anatomy';
+import { createAnatomy } from './figures';
 import { sstep } from './sdf';
 import { extractSurface } from './surfaceNets';
 
@@ -11,6 +12,8 @@ export interface BodyMeshData {
   skinWeight: Float32Array;
   /** x: jaw region, y: tip gradient, z: blush signed field, w: vertical gradient */
   masks: Float32Array;
+  /** clothed characters: hair, shirt, pants, shoes weights */
+  regions: Float32Array;
   ao: Float32Array;
 }
 
@@ -23,7 +26,7 @@ export const CELL_SIZE = { high: 0.0145, balanced: 0.018, low: 0.025 } as const;
  * occlusion straight from the distance field.
  */
 export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
-  const anatomy = new Anatomy(spec);
+  const anatomy = createAnatomy(spec);
   const { min, max } = anatomy.bounds();
   const { positions, normals, indices } = extractSurface(anatomy.sdf, min, max, cell);
   const count = positions.length / 3;
@@ -32,6 +35,8 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
   const skinWeight = new Float32Array(count * 4);
   const masks = new Float32Array(count * 4);
   const ao = new Float32Array(count);
+  const regions = new Float32Array(count * 4);
+  const reg = new Float32Array(4);
 
   const parts = new Float32Array(PART_COUNT);
   const w = new Float32Array(PART_COUNT);
@@ -42,7 +47,8 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
   const lobeW = new Float32Array(lobes.length);
   const softness = [0.04, 0.04, 0.025, 0.025, 0.03, 0.03, 0.035];
   const h = anatomy.head;
-  const blushC = [1, -1].map((s) => [h.c[0] + 0.45 * s, h.c[1] - 0.12]);
+  const F = anatomy.face;
+  const blushC = [1, -1].map((s) => [h.c[0] + F.blush.dx * s, h.c[1] + F.blush.dy]);
 
   for (let v = 0; v < count; v++) {
     const x = positions[v * 3], y = positions[v * 3 + 1], z = positions[v * 3 + 2];
@@ -128,14 +134,15 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
     let blush = -1;
     if (nz > 0.45 && w[PART.head] > 0.5) {
       for (const c of blushC) {
-        const e = Math.sqrt(((x - c[0]) / 0.125) ** 2 + ((y - c[1]) / 0.08) ** 2);
+        const e = Math.sqrt(((x - c[0]) / F.blush.rx) ** 2 + ((y - c[1]) / F.blush.ry) ** 2);
         blush = Math.max(blush, 1 - e);
       }
     }
     masks[v * 4 + 2] = blush;
     // Jaw region: the face below the mouth drops when the jaw opens.
-    const mouthY = h.c[1] - 0.165;
-    masks[v * 4] = sstep(mouthY + 0.02, mouthY - 0.14, y) * sstep(0.2, 0.6, nz) * (1 - sstep(0.22, 0.48, Math.abs(x))) * w[PART.head];
+    const mouthY = h.c[1] - F.mouthOffset;
+    masks[v * 4] = sstep(mouthY + 0.02 * F.scale, mouthY - 0.14 * F.scale, y) * sstep(0.2, 0.6, nz) * (1 - sstep(0.22 * F.scale, 0.48 * F.scale, Math.abs(x))) * w[PART.head];
+    if (anatomy.regions(x, y, z, w, reg)) regions.set(reg, v * 4);
     masks[v * 4 + 3] = w[PART.head] + w[PART.crown] + w[PART.earL] + w[PART.earR] > 0.5 ? 1 : sstep(0.0, anatomy.neck[1], y);
 
     // --- Ambient occlusion -------------------------------------------------
@@ -150,5 +157,5 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
     ao[v] = Math.min(1, Math.max(0, 1 - occ * 3.6));
   }
 
-  return { positions, normals, indices, skinIndex, skinWeight, masks, ao };
+  return { positions, normals, indices, skinIndex, skinWeight, masks, ao, regions };
 }

@@ -179,3 +179,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .composer .send { padding: 9px 12px; }
   .caption { font-size: 14px; }
 }
+
+/* Character switcher */
+.cast { display: flex; gap: 4px; margin-top: 12px; pointer-events: auto; }
+.cast button {
+  border: 1px solid var(--line); background: var(--chip); backdrop-filter: blur(10px);
+  padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; color: #55524b;
+}
+.cast button.on { background: var(--chip-on); border-color: var(--chip-on); color: #fff; }

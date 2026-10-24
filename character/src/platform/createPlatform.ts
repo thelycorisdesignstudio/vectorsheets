@@ -25,6 +25,8 @@ export interface Platform {
   /** Probe the server; switch to the live model if one is configured. */
   connect(): Promise<{ live: boolean; provider: string }>;
   setVoiceOutput(on: boolean): void;
+  /** Switch character: presentation profile and persona. */
+  setProfile(profile: CharacterProfile): void;
   dispose(): void;
 }
 
@@ -60,6 +62,10 @@ export function createPlatform(profile: CharacterProfile): Platform {
         return { live: true, provider: status.provider };
       }
       return { live: false, provider: 'scripted' };
+    },
+    setProfile(profile) {
+      embodiment.applyProfile(profile);
+      conversation.setProfile(profile);
     },
     setVoiceOutput(on) {
       conversation.setSynth(voiceFor(on));

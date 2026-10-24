@@ -26,9 +26,13 @@ export interface AnatomySpec {
   head: HeadShape;
   ears: EarStyle;
   crown: CrownFeature;
+  /** species: the alien (default) or a stylised human */
+  kind?: 'alien' | 'human';
+  /** human figure */
+  figure?: 'lady' | 'man';
 }
 
-interface HeadDef {
+export interface HeadDef {
   c: V3;
   rx: number;
   ry: number;
@@ -66,12 +70,35 @@ export interface EyeLandmark {
   side: 1 | -1;
 }
 
+/** Face layout relative to the head centre (scaled per character). */
+export interface FaceLayout {
+  /** overall scale of eyes, brows and mouth (1 = Oru) */
+  scale: number;
+  eyeSpread: number;
+  eyeLift: number;
+  /** brow height above the eye centre */
+  browOffset: number;
+  /** mouth distance below the head centre */
+  mouthOffset: number;
+  blush: { dx: number; dy: number; rx: number; ry: number };
+}
+
 export class Anatomy {
   readonly spec: AnatomySpec;
-  readonly head: HeadDef;
-  readonly headCenter: V3;
-  readonly neck: V3 = [0, 1.3, 0];
-  readonly crownPivot: V3;
+  head: HeadDef;
+  headCenter: V3;
+  neck: V3 = [0, 1.3, 0];
+  crownPivot: V3;
+  face: FaceLayout = {
+    scale: 1, eyeSpread: 0.29, eyeLift: 0.05, browOffset: 0.232, mouthOffset: 0.165,
+    blush: { dx: 0.45, dy: -0.12, rx: 0.125, ry: 0.08 },
+  };
+  /** touch collider for the body: centre + radii */
+  bellyCollider: { c: V3; r: V3 } = { c: [0, 0.75, 0.02], r: [0.42, 0.5, 0.34] };
+  /** foot x offset (for contact shadows) */
+  footX = 0.185;
+  /** model-space height range that jiggles like soft jelly */
+  wobbleRange: [number, number] = [1.5, 3.1];
   lobes: Lobe[] = [];
   ears: Leaf[] = [];
   eyes: EyeLandmark[] = [];
@@ -79,10 +106,10 @@ export class Anatomy {
   readonly eyeSize: [number, number] = [0.1, 0.122];
   // Thick, straight arms from broad shoulders, hanging out about 25 degrees.
   // The elbow lies on the straight line so the rest pose shows no kink.
-  readonly shoulders: [V3, V3] = [[0.25, 1.13, 0], [-0.25, 1.13, 0]];
-  readonly elbows: [V3, V3] = [[0.425, 0.88, 0.035], [-0.425, 0.88, 0.035]];
-  readonly hands: [V3, V3] = [[0.6, 0.63, 0.07], [-0.6, 0.63, 0.07]];
-  private partBounds: [number, number, number, number][] = [];
+  shoulders: [V3, V3] = [[0.25, 1.13, 0], [-0.25, 1.13, 0]];
+  elbows: [V3, V3] = [[0.425, 0.88, 0.035], [-0.425, 0.88, 0.035]];
+  hands: [V3, V3] = [[0.6, 0.63, 0.07], [-0.6, 0.63, 0.07]];
+  protected partBounds: [number, number, number, number][] = [];
   private scratch = new Float32Array(PART_COUNT);
 
   constructor(spec: AnatomySpec) {
@@ -90,13 +117,29 @@ export class Anatomy {
     this.head = HEADS[spec.head] ?? HEADS.puck;
     this.headCenter = this.head.c;
     this.crownPivot = [0, this.head.c[1] + 0.08, -0.12];
+    this.setup();
+  }
+
+  /** (Re)builds derived landmarks; subclasses call it after setting their own dimensions. */
+  protected setup() {
+    this.lobes = [];
+    this.ears = [];
+    this.eyes = [];
     this.buildCrown();
     this.buildEars();
     this.computeBounds();
     this.placeEyes();
   }
 
-  private buildCrown() {
+  /**
+   * Colour regions for clothed characters: writes [hair, shirt, pants, shoes]
+   * weights into `out` and returns true, or returns false (no regions).
+   */
+  regions(_x: number, _y: number, _z: number, _w: Float32Array, _out: Float32Array): boolean {
+    return false;
+  }
+
+  protected buildCrown() {
     const h = this.head;
     const [cx, cy] = h.c;
     const rim = (deg: number, inset = 0.78, z = -0.1): V3 => {
@@ -151,7 +194,7 @@ export class Anatomy {
     }
   }
 
-  private buildEars() {
+  protected buildEars() {
     const h = this.head;
     for (const side of [1, -1] as const) {
       if (this.spec.ears === 'fins') {
@@ -165,11 +208,11 @@ export class Anatomy {
     }
   }
 
-  private placeEyes() {
+  protected placeEyes() {
     const [cx, cy] = this.head.c;
     for (const side of [1, -1] as const) {
-      const x = cx + 0.29 * side;
-      const y = cy + 0.05;
+      const x = cx + this.face.eyeSpread * side;
+      const y = cy + this.face.eyeLift;
       const hit = this.raycast([x, y, 2], [0, 0, -1], this.headOnly);
       const p = hit ? hit.p : ([x, y, 0.3] as V3);
       const n = hit ? hit.n : ([0, 0, 1] as V3);
@@ -179,7 +222,7 @@ export class Anatomy {
 
   // --- Field ----------------------------------------------------------------
 
-  private headField(x: number, y: number, z: number) {
+  protected headField(x: number, y: number, z: number) {
     const h = this.head;
     const px = x - h.c[0], py = y - h.c[1], pz = z - h.c[2];
     // Squircle outline: rounder-square than an ellipse, like a soft disc.
@@ -201,7 +244,8 @@ export class Anatomy {
     return d;
   }
 
-  private crownField(x: number, y: number, z: number) {
+  protected crownField(x: number, y: number, z: number) {
+    if (!this.lobes.length) return 1e3;
     let d = 1e9;
     for (const l of this.lobes) {
       let dl: number;
@@ -222,7 +266,7 @@ export class Anatomy {
     return d;
   }
 
-  private bodyField(x: number, y: number, z: number) {
+  protected bodyField(x: number, y: number, z: number) {
     // Gummy-bear torso: broad rounded shoulders, a soft belly, wide hips.
     let d = sdEllipsoid(x, y - 1.0, z, 0.37, 0.34, 0.29);
     d = smin(d, sdEllipsoid(x, y - 0.8, z - 0.03, 0.37, 0.28, 0.3), 0.12);
@@ -242,7 +286,7 @@ export class Anatomy {
     return smax(d, -groove, 0.035);
   }
 
-  private armField(x: number, y: number, z: number, i: 0 | 1) {
+  protected armField(x: number, y: number, z: number, i: 0 | 1) {
     const s = this.shoulders[i], e = this.elbows[i], h = this.hands[i];
     // Thick tube, barely tapering, ending in a rounded, slightly flattened paddle.
     let d = sdRoundCone(x, y, z, s[0], s[1], s[2], e[0], e[1], e[2], 0.15, 0.135);
@@ -268,13 +312,13 @@ export class Anatomy {
         case PART.armR: out[i] = this.armField(x, y, z, 1); break;
         case PART.earL: out[i] = sdLeaf(x, y, z, this.ears[0]); break;
         case PART.earR: out[i] = sdLeaf(x, y, z, this.ears[1]); break;
-        default: out[i] = this.lobes.length ? this.crownField(x, y, z) : 1e3;
+        default: out[i] = this.crownField(x, y, z);
       }
     }
     return out;
   }
 
-  private computeBounds() {
+  protected computeBounds() {
     const h = this.head;
     const sphereOf = (pts: V3[], pad: number): [number, number, number, number] => {
       const c: V3 = [0, 0, 0];
@@ -346,4 +390,3 @@ export class Anatomy {
     return { min: [-1.14, -0.03, -0.82], max: [1.14, 3.2, 0.6] };
   }
 }
-

@@ -51,6 +51,11 @@ export type ToonMaterial = THREE.ShaderMaterial & {
     uBrowHalf: { value: number };
     uWobble: { value: THREE.Vector3 };
     uWobbleRange: { value: THREE.Vector2 };
+    uHair: { value: THREE.Color };
+    uShirt: { value: THREE.Color };
+    uPants: { value: THREE.Color };
+    uShoes: { value: THREE.Color };
+    uClothShadow: { value: THREE.Color };
   };
 };
 
@@ -70,8 +75,10 @@ uniform vec2 uWobbleRange;
 #ifdef USE_MASKS
 attribute vec4 aMask;
 attribute float aAO;
+attribute vec4 aRegion;
 varying vec4 vMask;
 varying float vAO;
+varying vec4 vRegion;
 #endif
 varying vec3 vNormalV;
 varying vec3 vRest;
@@ -107,6 +114,7 @@ void main() {
   #ifdef USE_MASKS
   vMask = aMask;
   vAO = aAO;
+  vRegion = aRegion;
   #endif
 }
 `;
@@ -126,9 +134,15 @@ varying vec3 vNormalV;
 varying vec3 vRest;
 varying vec3 vViewDir;
 varying vec3 vViewPos;
+uniform vec3 uHair;
+uniform vec3 uShirt;
+uniform vec3 uPants;
+uniform vec3 uShoes;
+uniform vec3 uClothShadow;
 #ifdef USE_MASKS
 varying vec4 vMask;
 varying float vAO;
+varying vec4 vRegion;
 #endif
 ${LIGHT_RIG_GLSL}
 void main() {
@@ -147,8 +161,18 @@ void main() {
   float blushEdge = fwidth(vMask.z) * 1.2 + 0.004;
   albedo = mix(albedo, uBlush, smoothstep(-blushEdge, blushEdge, vMask.z) * uBlushAmount);
   ao = mix(0.5, 1.0, vAO);
+  // Clothed characters: crisp colour regions for hair and clothes.
+  vec4 rg = smoothstep(0.38, 0.62, vRegion);
+  albedo = mix(albedo, uHair, rg.x);
+  albedo = mix(albedo, uShirt, rg.y);
+  albedo = mix(albedo, uPants, rg.z);
+  albedo = mix(albedo, uShoes, rg.w);
+  float cloth = max(max(rg.x, rg.y), max(rg.z, rg.w));
+  vec3 shadowMul = mix(uShadowMul, uClothShadow, cloth);
+  #else
+  vec3 shadowMul = uShadowMul;
   #endif
-  vec3 col = rigLight(albedo, N, normalize(vViewDir), vViewPos, uShadowMul, ao, uShade, uSpecScale);
+  vec3 col = rigLight(albedo, N, normalize(vViewDir), vViewPos, shadowMul, ao, uShade, uSpecScale);
   gl_FragColor = vec4(col, uOpacity);
   #include <colorspace_fragment>
 }
@@ -184,6 +208,11 @@ export function createToonMaterial(o: ToonOptions = {}): ToonMaterial {
       uBrowHalf: { value: 0.11 },
       uWobble: { value: new THREE.Vector3() },
       uWobbleRange: { value: new THREE.Vector2(1.5, 3.1) },
+      uHair: { value: new THREE.Color('#000000') },
+      uShirt: { value: new THREE.Color('#ffffff') },
+      uPants: { value: new THREE.Color('#000000') },
+      uShoes: { value: new THREE.Color('#000000') },
+      uClothShadow: { value: new THREE.Color(0.62, 0.64, 0.74) },
       ...LIGHT_RIG,
     },
     vertexShader: vertex,
