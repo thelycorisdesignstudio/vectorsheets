@@ -193,6 +193,7 @@ export function AlienCharacter({
     }
     const pose = controller.update(dt, input);
     rig.update(pose, Math.min(dt, 1 / 20));
+    rig.updateLighting(camera);
   });
 
   if (import.meta.env.DEV && rig) {

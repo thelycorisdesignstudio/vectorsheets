@@ -76,6 +76,7 @@ varying float vAO;
 varying vec3 vNormalV;
 varying vec3 vRest;
 varying vec3 vViewDir;
+varying vec3 vViewPos;
 void main() {
   #include <beginnormal_vertex>
   #include <skinbase_vertex>
@@ -102,6 +103,7 @@ void main() {
   vNormalV = normalize(transformedNormal);
   vRest = position;
   vViewDir = normalize(-mvPosition.xyz);
+  vViewPos = mvPosition.xyz;
   #ifdef USE_MASKS
   vMask = aMask;
   vAO = aAO;
@@ -123,6 +125,7 @@ uniform float uSpecScale;
 varying vec3 vNormalV;
 varying vec3 vRest;
 varying vec3 vViewDir;
+varying vec3 vViewPos;
 #ifdef USE_MASKS
 varying vec4 vMask;
 varying float vAO;
@@ -145,7 +148,7 @@ void main() {
   albedo = mix(albedo, uBlush, smoothstep(-blushEdge, blushEdge, vMask.z) * uBlushAmount);
   ao = mix(0.5, 1.0, vAO);
   #endif
-  vec3 col = rigLight(albedo, N, normalize(vViewDir), uShadowMul, ao, uShade, uSpecScale);
+  vec3 col = rigLight(albedo, N, normalize(vViewDir), vViewPos, uShadowMul, ao, uShade, uSpecScale);
   gl_FragColor = vec4(col, uOpacity);
   #include <colorspace_fragment>
 }

@@ -1,6 +1,6 @@
 import type { CrownFeature, EarStyle, HeadShape } from '../types';
 import {
-  type Leaf, type V3, add, makeLeaf, normalize, sdEllipsoid, sdLeaf, sdRoundCone, smin,
+  type Leaf, type V3, add, cross, makeLeaf, normalize, sdEllipsoid, sdLeaf, sdRoundCone, smin,
 } from './sdf';
 
 /**
@@ -56,6 +56,8 @@ export interface Lobe {
   r1: number;
   r2: number;
   flat: number;
+  /** thin axis for paddle-shaped lobes (flattened in the lobe's own frame) */
+  n?: V3;
 }
 
 export interface EyeLandmark {
@@ -111,13 +113,16 @@ export class Anatomy {
         // Six long, flat paddles fanning out from behind the head, overlapping at
         // the base and widening toward rounded tips. Lengths are deliberately uneven.
         const P = this.crownPivot;
-        const fan: [number, number, number][] = [[-92, 0.86, 0.17], [-60, 0.98, 0.19], [-27, 1.06, 0.2], [6, 1.08, 0.2], [39, 0.98, 0.19], [72, 0.86, 0.175]];
+        // Seven wide, flat paddles that touch and merge into one continuous fan.
+        const fan: [number, number, number][] = [[-96, 0.88, 0.17], [-65, 1.0, 0.185], [-34, 1.1, 0.195], [-3, 1.14, 0.2], [28, 1.09, 0.195], [58, 1.0, 0.185], [87, 0.87, 0.17]];
         for (const [deg, len, rTip] of fan) {
           const rad = (deg * Math.PI) / 180;
           // Lean back more toward the top so the mane frames the face from behind.
           const back = -0.3 - 0.25 * Math.cos(rad);
           const dir = normalize([Math.sin(rad), Math.cos(rad) * 0.95, back]);
-          this.lobes.push({ a: add(P, dir, 0.3), b: add(P, dir, len), r1: 0.12, r2: rTip, flat: 0.48 });
+          const side: V3 = [Math.cos(rad), -Math.sin(rad), 0];
+          const n = normalize(cross(dir, side));
+          this.lobes.push({ a: add(P, dir, 0.3), b: add(P, dir, len), r1: 0.1, r2: rTip, flat: 0.4, n });
         }
         break;
       }
@@ -162,7 +167,7 @@ export class Anatomy {
   private placeEyes() {
     const [cx, cy] = this.head.c;
     for (const side of [1, -1] as const) {
-      const x = cx + 0.262 * side;
+      const x = cx + 0.29 * side;
       const y = cy + 0.05;
       const hit = this.raycast([x, y, 2], [0, 0, -1], this.headOnly);
       const p = hit ? hit.p : ([x, y, 0.3] as V3);
@@ -198,11 +203,20 @@ export class Anatomy {
   private crownField(x: number, y: number, z: number) {
     let d = 1e9;
     for (const l of this.lobes) {
-      // Flatten front-to-back around the lobe's own origin.
-      const zz = l.a[2] + (z - l.a[2]) / l.flat;
-      const bz = l.a[2] + (l.b[2] - l.a[2]) / l.flat;
-      const dl = sdRoundCone(x, y, zz, l.a[0], l.a[1], l.a[2], l.b[0], l.b[1], bz, l.r1, l.r2) * l.flat;
-      d = d === 1e9 ? dl : smin(d, dl, 0.05);
+      let dl: number;
+      if (l.n) {
+        // Paddle: flatten along the lobe's own thin axis.
+        const px = x - l.a[0], py = y - l.a[1], pz = z - l.a[2];
+        const pn = px * l.n[0] + py * l.n[1] + pz * l.n[2];
+        const s = (1 / l.flat - 1) * pn;
+        dl = sdRoundCone(x + l.n[0] * s, y + l.n[1] * s, z + l.n[2] * s, l.a[0], l.a[1], l.a[2], l.b[0], l.b[1], l.b[2], l.r1, l.r2) * l.flat;
+      } else {
+        // Flatten front-to-back around the lobe's own origin.
+        const zz = l.a[2] + (z - l.a[2]) / l.flat;
+        const bz = l.a[2] + (l.b[2] - l.a[2]) / l.flat;
+        dl = sdRoundCone(x, y, zz, l.a[0], l.a[1], l.a[2], l.b[0], l.b[1], bz, l.r1, l.r2) * l.flat;
+      }
+      d = d === 1e9 ? dl : smin(d, dl, l.n ? 0.04 : 0.05);
     }
     return d;
   }
@@ -268,7 +282,7 @@ export class Anatomy {
       sphereOf([this.shoulders[1], this.elbows[1], this.hands[1]], 0.13),
       leaf(this.ears[0]),
       leaf(this.ears[1]),
-      crownPts.length ? sphereOf(crownPts, 0.18) : [0, -50, 0, 0.1],
+      crownPts.length ? sphereOf(crownPts, Math.max(...this.lobes.map((l) => l.r2)) + 0.08) : [0, -50, 0, 0.1],
     ];
   }
 

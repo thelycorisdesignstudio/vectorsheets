@@ -59,6 +59,8 @@ const POSE_LIBRARY: { name: string; weight: number; states: AnimationState[]; po
   { name: 'lean in', weight: 2.5, states: ['idle', 'waiting', 'listening', 'speaking'], pose: { rootRx: 0.075, headRx: -0.07, headRz: 0.12, armLz: 0.06, armRz: -0.06 } },
   { name: 'peek', weight: 1.5, states: ['idle', 'waiting'], pose: { headRz: 0.28, headRy: 0.12, rootRz: -0.055, rootX: 0.035 } },
   { name: 'hip shift', weight: 2, states: ['idle', 'waiting', 'listening'], pose: { rootRz: 0.065, rootX: 0.04, headRz: -0.1, armLz: 0.14, armRz: 0.03 } },
+  // The signature moment: a big, warm head tilt toward the viewer.
+  { name: 'hero lean', weight: 1.6, states: ['idle', 'waiting', 'listening'], pose: { headRz: 0.32, headRx: -0.07, headRy: 0.06, rootRz: -0.05, rootRx: 0.04, rootX: 0.02, armRz: -0.06 } },
   { name: 'hands in', weight: 1.2, states: ['idle', 'waiting', 'listening'], pose: { armLx: -0.32, armRx: -0.32, armLz: -0.22, armRz: 0.22, elbowL: -0.25, elbowR: 0.25, headRz: 0.08, headRx: 0.03 } },
 ];
 

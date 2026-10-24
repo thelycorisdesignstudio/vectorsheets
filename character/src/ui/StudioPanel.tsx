@@ -33,7 +33,7 @@ const HEADS: Record<HeadShape, string> = { puck: 'Puck', pebble: 'Pebble', bun: 
 const CROWNS: Record<CrownFeature, string> = { fronds: 'Fronds', buds: 'Buds', antennae: 'Antennae', ears: 'Ears', sprout: 'Sprout' };
 const EARS: Record<EarStyle, string> = { none: 'None', nubs: 'Nubs', fins: 'Fins' };
 const ACCESSORIES: Record<Accessory, string> = { collar: 'Collar', spectacles: 'Spectacles', bloom: 'Bloom' };
-const VIEWS: Record<CameraView, string> = { 'three-quarter': '¾', front: 'Front', side: 'Side', back: 'Back', close: 'Close' };
+const VIEWS: Record<CameraView, string> = { hero: 'Hero', 'three-quarter': '¾', front: 'Front', side: 'Side', back: 'Back', close: 'Close' };
 const EVENTS: EmbodimentEvent['type'][] = [
   'CHARACTER_GREETING', 'USER_STARTED_SPEAKING', 'USER_FINISHED_SPEAKING', 'AI_STARTED_THINKING',
   'AI_STARTED_SPEAKING', 'AI_FINISHED_SPEAKING', 'USER_INTERRUPTED', 'CONVERSATION_ENDED',

@@ -6,6 +6,7 @@ import { roundedProfile, sweptTube } from '../geometry/tube';
 import { createToonMaterial, shadowMultiplier, type ToonMaterial } from '../materials/toon';
 import { createEyeMaterial, type EyeMaterial } from '../materials/eye';
 import { createMouthMaterial } from '../materials/mouthMaterial';
+import { LIGHT_RIG } from '../materials/lightRig';
 import { Jiggle } from '../animation/springs';
 import { clamp, lerp, smoothstep } from '../animation/math';
 import type { Pose } from '../animation/AnimationController';
@@ -508,6 +509,20 @@ export class AlienRig {
     this.jiggleScale = scale;
   }
 
+  /**
+   * Places the soft box like a photographer would: up and to the left of the
+   * camera, just in front of the face, so lighting stays flattering from any
+   * orbit angle.
+   */
+  updateLighting(camera: THREE.Camera) {
+    const head = this.head.getWorldPosition(this.tmp);
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    const toward = camera.getWorldPosition(new THREE.Vector3()).sub(head).normalize();
+    const key = head.clone().addScaledVector(right, -2.4).addScaledVector(up, 2.7).addScaledVector(toward, 2.3);
+    LIGHT_RIG.uKeyPos.value.copy(key.applyMatrix4(camera.matrixWorldInverse));
+  }
+
   /** Converts a world-space look target into yaw/pitch relative to the body. */
   gazeAnglesTo(target: THREE.Vector3) {
     const eye = this.tmp2.set(0, 0, 0);
@@ -648,7 +663,7 @@ export class AlienRig {
       const px = clamp((yaw - pose.vergence * e.side) * 0.85, -0.42, 0.42);
       const py = clamp(-pitch * 0.85, -0.4, 0.4);
       u.uPupilPos.value.set(px, py);
-      u.uPupilSize.value = clamp(0.22 + f.pupil * 0.5, 0.2, 0.66);
+      u.uPupilSize.value = clamp(0.28 + f.pupil * 0.5, 0.24, 0.74);
     }
   }
 

@@ -9,6 +9,8 @@ import * as THREE from 'three';
  */
 export const LIGHT_RIG = {
   uKeyDir: { value: new THREE.Vector3(-0.42, 0.62, 0.66).normalize() },
+  /** view-space position of the soft box (updated per frame by the rig) */
+  uKeyPos: { value: new THREE.Vector3(-3, 3.5, -3.5) },
   uFillDir: { value: new THREE.Vector3(0.75, -0.05, 0.45).normalize() },
   uRimDir: { value: new THREE.Vector3(0.55, 0.55, -0.62).normalize() },
   uFillTint: { value: new THREE.Color('#9fb6ff') },
@@ -23,6 +25,7 @@ export type LightRigUniforms = typeof LIGHT_RIG;
 
 export const LIGHT_RIG_GLSL = /* glsl */ `
 uniform vec3 uKeyDir;
+uniform vec3 uKeyPos;
 uniform vec3 uFillDir;
 uniform vec3 uRimDir;
 uniform vec3 uFillTint;
@@ -31,8 +34,13 @@ uniform float uSpec;
 uniform float uAOStrength;
 
 // Stylised lighting: returns the lit colour for an albedo.
-vec3 rigLight(vec3 albedo, vec3 N, vec3 V, vec3 shadowMul, float ao, float shade, float specScale) {
-  float key = smoothstep(-0.55, 0.95, dot(N, uKeyDir));
+vec3 rigLight(vec3 albedo, vec3 N, vec3 V, vec3 viewPos, vec3 shadowMul, float ao, float shade, float specScale) {
+  // Soft box: a large close light, so even flat planes get a gentle falloff.
+  vec3 toKey = uKeyPos - viewPos;
+  float dKey = length(toKey);
+  vec3 Lk = toKey / dKey;
+  float falloff = mix(0.6, 1.0, smoothstep(5.2, 2.2, dKey));
+  float key = smoothstep(-0.55, 0.95, dot(N, Lk)) * falloff;
   float fill = max(dot(N, uFillDir), 0.0);
   float sky = 0.5 + 0.5 * N.y;
   float light = mix(0.2, 1.0, key) * mix(0.86, 1.0, sky);
@@ -46,9 +54,12 @@ vec3 rigLight(vec3 albedo, vec3 N, vec3 V, vec3 shadowMul, float ao, float shade
   col *= mix(vec3(1.0), shadowMul, pow(1.0 - facing, 2.5) * 0.4 * shade);
   float rim = pow(1.0 - facing, 3.0) * smoothstep(-0.1, 0.7, dot(N, uRimDir));
   col += uRimTint * rim * 0.28 * shade;
+  // Bevels and rounded edges facing the soft box catch a soft glow.
+  float edge = pow(1.0 - facing, 1.6) * smoothstep(0.15, 0.85, dot(N, Lk)) * falloff;
+  col += mix(albedo, vec3(1.0), 0.35) * edge * 0.14 * shade;
   // Broad satin highlight: soft, low, never glossy.
-  vec3 H = normalize(uKeyDir + V);
-  float spec = pow(max(dot(N, H), 0.0), 18.0) * uSpec * occl * specScale;
+  vec3 H = normalize(Lk + V);
+  float spec = pow(max(dot(N, H), 0.0), 10.0) * uSpec * occl * specScale * 0.7 * smoothstep(0.25, 0.65, facing);
   col += vec3(spec) * 0.16 * shade;
   // Gentle shoulder so highlights never clip harshly.
   col -= max(col - 0.92, 0.0) * 0.55;

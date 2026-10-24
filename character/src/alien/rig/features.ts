@@ -4,7 +4,7 @@ import { roundedProfile, sweptTube } from '../geometry/tube';
 
 /** Eye shape presets: half-size of the eye on the face and a lid slant. */
 export const EYE_SHAPES: Record<EyeShape, { size: [number, number]; lidTilt: number; label: string }> = {
-  oval: { size: [0.124, 0.148], lidTilt: 0, label: 'Oval' },
+  oval: { size: [0.136, 0.158], lidTilt: 0, label: 'Oval' },
   round: { size: [0.133, 0.133], lidTilt: 0, label: 'Round' },
   almond: { size: [0.146, 0.113], lidTilt: 0.14, label: 'Almond' },
   droplet: { size: [0.106, 0.158], lidTilt: -0.08, label: 'Droplet' },

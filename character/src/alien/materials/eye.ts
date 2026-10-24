@@ -41,7 +41,7 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
       uSide: { value: side },
       uAspect: { value: aspect },
       ...LIGHT_RIG,
-      uCatch: { value: 1 },
+      uCatch: { value: 0.35 },
       uClosed: { value: 0 },
       uLash: { value: new THREE.Color('#5530c9') },
     },
@@ -50,6 +50,7 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
       varying vec3 vN;
       varying vec3 vFaceN;
       varying vec3 vView;
+      varying vec3 vViewPos;
       void main() {
         vUv2 = position.xy;
         vN = normalize(normalMatrix * normal);
@@ -57,6 +58,7 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
         vFaceN = normalize(normalMatrix * vec3(0.0, 0.0, 1.0));
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         vView = normalize(-mv.xyz);
+        vViewPos = mv.xyz;
         gl_Position = projectionMatrix * mv;
       }
     `,
@@ -78,6 +80,7 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
       varying vec3 vN;
       varying vec3 vFaceN;
       varying vec3 vView;
+      varying vec3 vViewPos;
       ${LIGHT_RIG_GLSL}
       void main() {
         // Unit-disc coordinates of the eye (geometry is a unit dome scaled by the mesh).
@@ -112,7 +115,7 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
         eye *= mix(1.0, 0.86, lidShade);
         // Thin darker crease where the lid meets the eye.
         float creaseU = smoothstep(upper + aa, upper + aa + 0.06, p.y);
-        vec3 skinLit = rigLight(uSkin, normalize(vFaceN), normalize(vView), uShadowMul, 1.0, 1.0, 1.0);
+        vec3 skinLit = rigLight(uSkin, normalize(vFaceN), normalize(vView), vViewPos, uShadowMul, 1.0, 1.0, 1.0);
         vec3 skin = mix(skinLit * mix(vec3(1.0), uShadowMul, 0.5), skinLit, max(creaseU, lidL));
         vec3 N = normalize(vN);
         float light = mix(0.82, 1.0, smoothstep(-0.55, 0.95, dot(N, uKeyDir)));

@@ -4,11 +4,13 @@ import { OrbitControls, PerformanceMonitor } from '@react-three/drei';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
-export type CameraView = 'three-quarter' | 'front' | 'side' | 'back' | 'close';
+export type CameraView = 'hero' | 'three-quarter' | 'front' | 'side' | 'back' | 'close';
 
 type Vec = [number, number, number];
 export const VIEWS: Record<CameraView, { position: Vec; target: Vec }> = {
   // Targets sit a little low so the character floats above the conversation dock.
+  // Hero: an intimate head-and-shoulders shot from slightly to the side.
+  hero: { position: [2.3, 2.55, 6.3], target: [0.12, 1.8, 0] },
   'three-quarter': { position: [2.85, 2.05, 7.4], target: [0, 1.3, 0] },
   front: { position: [0, 1.7, 8], target: [0, 1.32, 0] },
   side: { position: [7.6, 1.9, 0.3], target: [0, 1.45, 0] },
@@ -49,8 +51,8 @@ function CameraRig({ view, focus, controls }: { view: CameraView; focus: number;
   }, [view]);
   useEffect(() => {
     const v = VIEWS[view];
-    const k = view === 'close' ? Math.min(fitScale(aspect), 1.25) : fitScale(aspect);
-    const f = view === 'close' ? 0 : focus;
+    const k = view === 'close' || view === 'hero' ? Math.min(fitScale(aspect) * (view === 'hero' ? 0.82 : 1), 1.3) : fitScale(aspect);
+    const f = view === 'close' || view === 'hero' ? 0 : focus;
     // Conversation framing: closer, aimed at the face.
     target.current.set(v.target[0], v.target[1] + (1.72 - v.target[1]) * f, v.target[2]);
     const dist = k * (1 - 0.24 * f);

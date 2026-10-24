@@ -15,7 +15,7 @@ function readParams() {
   return {
     present: q.has('present'),
     studio: q.has('dev') || q.has('studio'),
-    view: (q.get('view') as CameraView) || 'three-quarter',
+    view: (q.get('view') as CameraView) || 'hero',
     still: q.has('still'),
     q,
   };
