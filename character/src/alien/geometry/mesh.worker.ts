@@ -7,6 +7,6 @@ self.onmessage = (event: MessageEvent<{ id: number; spec: AnatomySpec; cell: num
   const data = buildBodyMesh(spec, cell);
   (self as unknown as Worker).postMessage({ id, data }, [
     data.positions.buffer, data.normals.buffer, data.indices.buffer,
-    data.skinIndex.buffer, data.skinWeight.buffer, data.masks.buffer, data.ao.buffer,
+    data.skinIndex.buffer, data.skinWeight.buffer, data.masks.buffer, data.ao.buffer, data.regions.buffer,
   ]);
 };

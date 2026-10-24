@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { Anatomy, LOBE_BONE_BASE, MAX_LOBES, type AnatomySpec } from '../geometry/anatomy';
+import { createAnatomy } from '../geometry/figures';
 import type { BodyMeshData } from '../geometry/bodyMesh';
 import type { V3 } from '../geometry/sdf';
 import { roundedProfile, sweptTube } from '../geometry/tube';
 import { createToonMaterial, shadowMultiplier, type ToonMaterial } from '../materials/toon';
 import { createEyeMaterial, type EyeMaterial } from '../materials/eye';
 import { createMouthMaterial } from '../materials/mouthMaterial';
+import { LIGHT_RIG } from '../materials/lightRig';
 import { Jiggle } from '../animation/springs';
 import { clamp, lerp, smoothstep } from '../animation/math';
 import type { Pose } from '../animation/AnimationController';
@@ -40,7 +42,7 @@ interface LobeRig {
   jz: Jiggle;
 }
 
-const BROW_HALF: Record<BrowShape, number> = { pill: 0.11, arched: 0.1, tuft: 0.085, dots: 0.065, none: 0.1 };
+const BROW_HALF: Record<BrowShape, number> = { pill: 0.125, arched: 0.1, tuft: 0.085, dots: 0.065, none: 0.1 };
 
 interface AntennaRig {
   bones: THREE.Bone[];
@@ -79,6 +81,8 @@ export class AlienRig {
   private armR = new THREE.Bone();
   private foreL = new THREE.Bone();
   private foreR = new THREE.Bone();
+  private handL = new THREE.Bone();
+  private handR = new THREE.Bone();
   private earL = new THREE.Bone();
   private earR = new THREE.Bone();
   private crown = new THREE.Bone();
@@ -99,6 +103,10 @@ export class AlienRig {
   private earJiggle = [new Jiggle(150, 8), new Jiggle(150, 8)];
   private crownJiggle = { x: new Jiggle(110, 6.5), z: new Jiggle(110, 6.5) };
   private headJiggle = new Jiggle(90, 10);
+  // Overlapping action: the head trails the body's turns, then catches up.
+  private headLag = { z: new Jiggle(70, 9), x: new Jiggle(70, 9) };
+  private lastRoot = { z: 0, x: 0 };
+  private wobble = { x: new Jiggle(120, 8), y: new Jiggle(140, 9), z: new Jiggle(120, 8) };
   private lastHeadQuat = new THREE.Quaternion();
   private lastHeadPos = new THREE.Vector3();
   private headVel = new THREE.Vector3();
@@ -116,13 +124,16 @@ export class AlienRig {
   private footMat: THREE.MeshBasicMaterial;
 
   constructor(spec: AnatomySpec, data: BodyMeshData, palette: Palette) {
-    this.anatomy = new Anatomy(spec);
+    this.anatomy = createAnatomy(spec);
     const a = this.anatomy;
     this.neck = v3(a.neck);
     this.root.name = 'Character';
     this.root.add(this.mover);
 
+    // The human cast is cel shaded (crisp shadow shapes); the alien species stays soft.
+    LIGHT_RIG.uCel.value = this.anatomy.spec.kind === 'human' ? 1 : 0;
     this.skinMat = createToonMaterial({ masks: true });
+    this.skinMat.uniforms.uWobbleRange.value.set(...this.anatomy.wobbleRange);
     this.antennaMat = createToonMaterial({ gradient: [0, 0.3] });
     this.mouthMat = createMouthMaterial(palette);
     this.disposables.push(this.skinMat, this.antennaMat, this.mouthMat, this.colliderMat, this.glowTex, this.eyeGeo);
@@ -135,6 +146,8 @@ export class AlienRig {
     named(this.armR, 'arm_R');
     named(this.foreL, 'forearm_L');
     named(this.foreR, 'forearm_R');
+    named(this.handL, 'hand_L');
+    named(this.handR, 'hand_R');
     named(this.earL, 'ear_L');
     named(this.earR, 'ear_R');
     named(this.crown, 'crown');
@@ -143,6 +156,8 @@ export class AlienRig {
     this.armR.position.copy(v3(a.shoulders[1]));
     this.foreL.position.copy(v3(a.elbows[0]).sub(v3(a.shoulders[0])));
     this.foreR.position.copy(v3(a.elbows[1]).sub(v3(a.shoulders[1])));
+    this.handL.position.copy(v3(a.hands[0]).sub(v3(a.elbows[0])));
+    this.handR.position.copy(v3(a.hands[1]).sub(v3(a.elbows[1])));
     this.earL.position.copy(v3(a.ears[0].root)).sub(this.neck);
     this.earR.position.copy(v3(a.ears[1].root)).sub(this.neck);
     this.crown.position.copy(v3(a.crownPivot)).sub(this.neck);
@@ -150,6 +165,8 @@ export class AlienRig {
     this.hips.add(this.armL, this.armR);
     this.armL.add(this.foreL);
     this.armR.add(this.foreR);
+    this.foreL.add(this.handL);
+    this.foreR.add(this.handR);
     this.head.add(this.earL, this.earR, this.crown);
     // One bone per crown lobe so each can move with the mood and ripple on its own.
     a.lobes.slice(0, MAX_LOBES).forEach((l, i) => {
@@ -170,6 +187,7 @@ export class AlienRig {
     geo.setAttribute('skinWeight', new THREE.BufferAttribute(data.skinWeight, 4));
     geo.setAttribute('aMask', new THREE.BufferAttribute(data.masks, 4));
     geo.setAttribute('aAO', new THREE.BufferAttribute(data.ao, 1));
+    geo.setAttribute('aRegion', new THREE.BufferAttribute(data.regions, 4));
     geo.setIndex(new THREE.BufferAttribute(data.indices, 1));
     geo.computeBoundingSphere();
     this.disposables.push(geo);
@@ -196,20 +214,21 @@ export class AlienRig {
     this.footMat = new THREE.MeshBasicMaterial({ map: this.glowTex, transparent: true, depthWrite: false, opacity: 0.4, toneMapped: false });
     for (const side of [1, -1]) {
       const f = new THREE.Mesh(shadowGeo, this.footMat);
-      f.position.set(0.165 * side, 0.003, 0.07);
+      f.position.set(a.footX * side, 0.003, 0.07);
       f.scale.set(0.34, 1, 0.4);
       f.renderOrder = -1;
-      f.userData.x = 0.165 * side;
+      f.userData.x = a.footX * side;
       this.root.add(f);
       this.feet.push(f);
     }
     this.disposables.push(this.shadowMat, this.footMat, shadowGeo);
 
     this.accessories = buildAccessories(a, { mover: this.mover, head: this.head, crown: this.crown }, palette);
+    this.buildBangles();
 
     this.mover.updateMatrixWorld(true);
     // Skeleton order must match the bone slots baked by bodyMesh (BONE + lobe bones).
-    const bones = [this.hips, this.head, this.armL, this.armR, this.earL, this.earR, this.crown, this.foreL, this.foreR];
+    const bones = [this.hips, this.head, this.armL, this.armR, this.earL, this.earR, this.crown, this.foreL, this.foreR, this.handL, this.handR];
     for (let i = 0; i < MAX_LOBES; i++) bones[LOBE_BONE_BASE + i] = this.lobes[i]?.bone ?? this.crown;
     this.body.bind(new THREE.Skeleton(bones));
     this.setPalette(palette);
@@ -221,12 +240,35 @@ export class AlienRig {
     return v3(p).sub(this.neck);
   }
 
+  /** Bangles are separate rings riding on the forearm bones, each in its own colour. */
+  private buildBangles() {
+    const a = this.anatomy;
+    for (const b of a.bangles) {
+      const el = v3(a.elbows[b.arm]), hand = v3(a.hands[b.arm]);
+      const axis = hand.clone().sub(el);
+      const r = a.armRadiusAt(b.arm, b.t) + b.tube * 0.6;
+      const geo = new THREE.TorusGeometry(r, b.tube, 10, 40);
+      const color = new THREE.Color(b.color);
+      const mat = createToonMaterial({ color: b.color, shadow: '#' + color.clone().multiplyScalar(0.62).getHexString(), shade: 0.85 });
+      const ring = new THREE.Mesh(geo, mat);
+      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis.clone().normalize());
+      ring.position.copy(axis.multiplyScalar(b.t));
+      (b.arm === 0 ? this.foreL : this.foreR).add(ring);
+      this.disposables.push(geo, mat);
+    }
+  }
+
   private buildEyes() {
     for (const lm of this.anatomy.eyes) {
       const group = new THREE.Group();
-      group.position.copy(this.toHead(lm.center)).addScaledVector(v3(lm.normal), -0.006);
-      group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), v3(lm.normal).lerp(new THREE.Vector3(0, 0, 1), 0.5).normalize());
+      // Set into the face (not stuck on): sunk slightly and following the surface.
+      group.position.copy(this.toHead(lm.center)).addScaledVector(v3(lm.normal), (this.anatomy.spec.kind === 'human' ? 0.002 : -0.013) * this.anatomy.face.scale);
+      group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), v3(lm.normal).lerp(new THREE.Vector3(0, 0, 1), 0.3).normalize());
       const mat = createEyeMaterial(lm.side, 1);
+      mat.uniforms.uLiner.value = this.anatomy.face.liner ?? 0;
+      const flat = this.anatomy.face.eyeStyle === 'flat';
+      mat.uniforms.uFlat.value = flat ? 1 : 0;
+      mat.uniforms.uCatch.value = flat ? 0 : 0.35;
       const mesh = new THREE.Mesh(this.eyeGeo, mat);
       mesh.renderOrder = 1;
       group.add(mesh);
@@ -240,7 +282,7 @@ export class AlienRig {
     const a = this.anatomy;
     for (const lm of a.eyes) {
       const c = lm.center;
-      const hit = a.raycast([c[0] + lm.side * 0.012, c[1] + 0.205, 2], [0, 0, -1]);
+      const hit = a.raycast([c[0] + lm.side * 0.014 * a.face.scale, c[1] + a.face.browOffset, 2], [0, 0, -1]);
       const p = hit ? hit.p : ([c[0], c[1] + 0.2, c[2]] as V3);
       const n = hit ? v3(hit.n) : new THREE.Vector3(0, 0, 1);
       const anchor = new THREE.Group();
@@ -259,12 +301,15 @@ export class AlienRig {
 
   private sampleMouthPatch() {
     const a = this.anatomy;
-    const yc = a.head.c[1] - 0.135;
+    const yc = a.head.c[1] - a.face.mouthOffset;
+    // The patch spans the face in the character's own scale, while the mouth is
+    // shaped in Oru-scale units: the lookup maps one onto the other.
+    const fs = a.face.scale;
     const patch = new Float32Array(PATCH_X * PATCH_Y * 6);
     for (let j = 0; j < PATCH_Y; j++) {
       for (let i = 0; i < PATCH_X; i++) {
-        const x = -PATCH_W + (2 * PATCH_W * i) / (PATCH_X - 1);
-        const y = yc + PATCH_Y0 + ((PATCH_Y1 - PATCH_Y0) * j) / (PATCH_Y - 1);
+        const x = (-PATCH_W + (2 * PATCH_W * i) / (PATCH_X - 1)) * fs;
+        const y = yc + (PATCH_Y0 + ((PATCH_Y1 - PATCH_Y0) * j) / (PATCH_Y - 1)) * fs;
         const hit = a.raycast([x, y, 2], [0, 0, -1]);
         const o = (j * PATCH_X + i) * 6;
         const p = hit ? hit.p : ([x, y, 0.3] as V3);
@@ -405,7 +450,8 @@ export class AlienRig {
     const h = a.head;
     make('head', this.head, this.toHead(h.c), new THREE.Vector3(h.rx + 0.03, h.ry + 0.03, h.depth + 0.1));
     if (a.lobes.length) make('antenna', this.crown, new THREE.Vector3(0, 0.22, 0), new THREE.Vector3(h.rx * 0.95, 0.34, 0.22));
-    make('belly', this.hips, new THREE.Vector3(0, 0.55, 0.02), new THREE.Vector3(0.36, 0.42, 0.3));
+    const bc = a.bellyCollider;
+    make('belly', this.hips, v3(bc.c), v3(bc.r));
     if (a.spec.ears !== 'none') {
       [this.earL, this.earR].forEach((bone, i) => {
         const L = a.ears[i];
@@ -421,13 +467,45 @@ export class AlienRig {
     this.footMat.color.set(color).multiplyScalar(0.8);
   }
 
+  /** The body shader's blended skin colour at a rest-pose point (mirrors toon.ts). */
+  private skinColorAt(pt: THREE.Vector3, p: Palette) {
+    const u = this.skinMat.uniforms;
+    const top = this.anatomy.head.c[1] + this.anatomy.head.ry;
+    const w = smoothstep(0, top, pt.y);
+    const c = new THREE.Color(p.baseLow).lerp(new THREE.Color(p.base), smoothstep(0, 0.55, w));
+    c.lerp(new THREE.Color(p.high ?? p.base), smoothstep(0.5, 1, w));
+    const fc = u.uFaceC.value, fr = u.uFaceR.value;
+    const len = Math.hypot((pt.x - fc.x) / fr.x, (pt.y - fc.y) / fr.y);
+    const fw = (1 - smoothstep(0.25, 1.05, len)) * smoothstep(fc.z - 0.05, fc.z + 0.22, pt.z);
+    return c.lerp(new THREE.Color(p.face ?? p.base), fw * u.uFaceAmt.value);
+  }
+
   setPalette(p: Palette) {
     const u = this.skinMat.uniforms;
     u.uColor.value.set(p.base);
     u.uColorLow.value.set(p.baseLow);
+    u.uColorHigh.value.set(p.high ?? p.base);
+    u.uFace.value.set(p.face ?? p.base);
+    u.uFaceAmt.value = p.face ? 0.55 : 0;
+    const h = this.anatomy.head;
+    u.uFaceC.value.set(h.c[0], h.c[1] + this.anatomy.face.eyeLift * 0.5, h.c[2] + h.depth * 0.4);
+    u.uFaceR.value.set(h.rx * 0.95, h.ry * 0.95);
+    u.uSheen.value.set(p.sheen ?? '#000000');
+    u.uFreckles.value = this.anatomy.face.freckles ?? 0;
+    u.uSoleY.value = this.anatomy.footwear.soleY;
+    u.uSockY.value = this.anatomy.footwear.sockY;
     u.uTip.value.set(p.tip);
     u.uBlush.value.set(p.blush);
     shadowMultiplier(p.shadow, p.base, u.uShadowMul.value);
+    if (p.regions) {
+      // Clothing colours follow the outfit being worn (casual uses the base regions).
+      const o = this.anatomy.spec.outfit;
+      const wear = (o && o !== 'casual' && !(o === 'dress' && this.anatomy.spec.figure === 'man') && p.outfits?.[o]) || p.regions;
+      u.uHair.value.set(p.regions.hair);
+      u.uShirt.value.set(wear.shirt);
+      u.uPants.value.set(wear.pants);
+      u.uShoes.value.set(wear.shoes);
+    }
     for (const b of this.brows) {
       const bu = b.mat.uniforms;
       bu.uColor.value.set(p.brow);
@@ -441,7 +519,8 @@ export class AlienRig {
     for (const e of this.eyes) {
       e.mat.uniforms.uSclera.value.set(p.sclera);
       e.mat.uniforms.uPupil.value.set(p.pupil);
-      e.mat.uniforms.uSkin.value.set(p.base);
+      // Lids must match the blended skin right around the eye, or they show as patches.
+      e.mat.uniforms.uSkin.value.copy(this.skinColorAt(e.group.position.clone().add(this.neck), p));
       e.mat.uniforms.uLash.value.set(p.brow);
       shadowMultiplier(p.shadow, p.base, e.mat.uniforms.uShadowMul.value);
     }
@@ -459,9 +538,12 @@ export class AlienRig {
 
   setEyeShape(shape: EyeShape) {
     this.eyeShape = shape;
-    const [sx, sy] = EYE_SHAPES[shape].size;
+    const fs = this.anatomy.face.scale;
+    const es = this.anatomy.face.eyeSize ?? 1;
+    const [sx, sy0] = EYE_SHAPES[shape].size.map((v) => v * fs * es);
+    const sy = sy0 * (this.anatomy.face.eyeAspect ?? 1);
     for (const e of this.eyes) {
-      e.mesh.scale.set(sx, sy, 0.034);
+      e.mesh.scale.set(sx, sy, 0.034 * fs);
       e.mat.uniforms.uAspect.value = sy / sx;
     }
   }
@@ -477,6 +559,10 @@ export class AlienRig {
       }
       if (!base) continue;
       const geo = base.clone();
+      const fs = this.anatomy.face.scale;
+      // Slimmer than sculpted: soft, friendly brows rather than heavy slabs.
+      const bs = this.anatomy.face.browSize ?? 1;
+      geo.scale(fs * bs, fs * bs * (this.anatomy.face.eyeStyle === 'flat' ? 1.05 : 0.8), fs);
       if (b.side < 0) {
         geo.scale(-1, 1, 1);
         // Mirroring flips the winding; restore it so the brow stays solid.
@@ -490,7 +576,7 @@ export class AlienRig {
         index.needsUpdate = true;
       }
       b.mesh = new THREE.Mesh(geo, b.mat);
-      b.mat.uniforms.uBrowHalf.value = BROW_HALF[shape];
+      b.mat.uniforms.uBrowHalf.value = BROW_HALF[shape] * this.anatomy.face.scale * (this.anatomy.face.browSize ?? 1);
       b.anchor.add(b.mesh);
     }
     base?.dispose();
@@ -502,6 +588,20 @@ export class AlienRig {
 
   setJiggle(scale: number) {
     this.jiggleScale = scale;
+  }
+
+  /**
+   * Places the soft box like a photographer would: up and to the left of the
+   * camera, just in front of the face, so lighting stays flattering from any
+   * orbit angle.
+   */
+  updateLighting(camera: THREE.Camera) {
+    const head = this.head.getWorldPosition(this.tmp);
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    const toward = camera.getWorldPosition(new THREE.Vector3()).sub(head).normalize();
+    const key = head.clone().addScaledVector(right, -2.4).addScaledVector(up, 2.7).addScaledVector(toward, 2.3);
+    LIGHT_RIG.uKeyPos.value.copy(key.applyMatrix4(camera.matrixWorldInverse));
   }
 
   /** Converts a world-space look target into yaw/pitch relative to the body. */
@@ -537,11 +637,22 @@ export class AlienRig {
     }
 
     const hj = this.headJiggle.update(-b.rootRz * 0.4, dt);
-    this.head.rotation.set(b.headRx, b.headRy, b.headRz + hj * 0.3);
-    this.armL.rotation.set(b.armLx, 0, b.armLz);
-    this.armR.rotation.set(b.armRx, 0, b.armRz);
-    this.foreL.rotation.set(b.elbowLx, 0, b.elbowL);
-    this.foreR.rotation.set(b.elbowRx, 0, b.elbowR);
+    const rootVz = dt > 0 ? (b.rootRz - this.lastRoot.z) / dt : 0;
+    const rootVx = dt > 0 ? (b.rootRx - this.lastRoot.x) / dt : 0;
+    this.lastRoot.z = b.rootRz;
+    this.lastRoot.x = b.rootRx;
+    const lagZ = this.headLag.z.update(clamp(-rootVz * 0.12, -0.12, 0.12) * this.jiggleScale, dt);
+    const lagX = this.headLag.x.update(clamp(-rootVx * 0.12, -0.12, 0.12) * this.jiggleScale, dt);
+    this.head.rotation.set(b.headRx + lagX, b.headRy, b.headRz + hj * 0.3 + lagZ + (this.anatomy.restPose.headRz ?? 0));
+    // Animation layers on top of the character's resting stance.
+    const r = this.anatomy.restPose;
+    const sw = this.anatomy.armSwing;
+    this.armL.rotation.set(b.armLx + r.armLx, r.armLy ?? 0, b.armLz * sw + r.armLz);
+    this.armR.rotation.set(b.armRx + r.armRx, r.armRy ?? 0, b.armRz * sw + r.armRz);
+    this.foreL.rotation.set(b.elbowLx + r.elbowLx, r.elbowLy ?? 0, b.elbowL + r.elbowL);
+    this.foreR.rotation.set(b.elbowRx + r.elbowRx, r.elbowRy ?? 0, b.elbowR + r.elbowR);
+    this.handL.rotation.set(0, r.handLy ?? 0, 0);
+    this.handR.rotation.set(0, r.handRy ?? 0, 0);
 
     // Secondary motion driven by the head's motion through space.
     this.head.updateMatrixWorld();
@@ -556,6 +667,16 @@ export class AlienRig {
       const cz = this.crownJiggle.z.update(clamp(-spinZ * 0.03 - this.headVel.x * 0.12, -0.3, 0.3) * js, dt);
       const cx = this.crownJiggle.x.update(clamp(-spinX * 0.03 + this.headVel.y * 0.18 - this.headVel.z * 0.1, -0.3, 0.3) * js, dt);
       if (pose.kick > 0) this.crownJiggle.x.kick(-3 * pose.kick);
+      // Jelly lag of the upper head and crown, from the head's motion (mover space).
+      const inv = this.mover.getWorldQuaternion(new THREE.Quaternion()).invert();
+      const v = this.tmp2.copy(this.headVel).applyQuaternion(inv);
+      const wu = this.skinMat.uniforms.uWobble.value;
+      wu.set(
+        this.wobble.x.update(clamp(-v.x * 0.035, -0.04, 0.04) * js, dt),
+        this.wobble.y.update(clamp(-v.y * 0.05 - b.squash * 0.25, -0.05, 0.05) * js, dt),
+        this.wobble.z.update(clamp(-v.z * 0.035, -0.04, 0.04) * js, dt),
+      );
+      if (pose.kick > 0) this.wobble.y.kick(0.6 * pose.kick);
       this.crown.rotation.set(cx, 0, cz);
       this.updateLobes(pose, dt, spinZ, b.earL);
       const jl = this.earJiggle[0].update(clamp(spinZ * 0.04 + this.headVel.y * 0.2, -0.4, 0.4) * js, dt);
@@ -571,7 +692,7 @@ export class AlienRig {
     this.updateBrows(f);
     this.updateMouth(f);
     this.updateAntennae(pose, dt, f.glow + b.glow);
-    this.skinMat.uniforms.uBlushAmount.value = clamp(0.55 + f.blush * 0.5, 0, 1);
+    this.skinMat.uniforms.uBlushAmount.value = clamp(0.55 + f.blush * 0.5, 0, 1) * this.anatomy.blushStrength;
     this.skinMat.uniforms.uJaw.value = clamp(f.jaw, 0, 1.2);
     this.skinMat.uniforms.uCheek.value = clamp(f.cheek, -0.5, 1.2);
   }
@@ -587,7 +708,7 @@ export class AlienRig {
     const ripple = (0.022 + pose.flourish * 0.08) * this.jiggleScale;
     for (const l of this.lobes) {
       const side = Math.sign(l.lean) || 0;
-      const up = mood > 0 ? mood * 0.12 : mood * 0.42; // + toward upright, − droop outward
+      const up = mood > 0 ? mood * 0.12 : mood * 0.28; // + toward upright, − droop outward
       const wave = Math.sin(t * (1.15 + pose.flourish * 4) - l.index * 0.95) * ripple;
       const sway = Math.sin(t * 0.85 - l.index * 0.7) * ripple * 0.7;
       const jz = l.jz.update(clamp(-spinZ * 0.035 - this.headVel.x * 0.15, -0.35, 0.35) * this.jiggleScale, dt);
@@ -612,13 +733,16 @@ export class AlienRig {
       const sq = clamp(f.eyeSquash, 0.75, 1.2);
       e.group.scale.set(sc * (1 + (1 - sq) * 0.35), sc * sq * (1 - blink * 0.1), 1);
       // Lower lid rises into a crescent for smiling eyes.
-      const ll = clamp(f.lidLower, 0, 1.1);
+      // Flat graphic eyes rest as full circles: the lower lid only rises with a smile.
+      const ll = clamp(f.lidLower - (this.anatomy.face.eyeStyle === 'flat' ? 0.14 : 0), 0, 1.1);
       const lower = lerp(-1.25, 0.12, ll);
       const curveU = 0.22 + 0.1 * (1 - clamp(f.lidUpper, 0, 1));
       const curveL = 0.18 + 0.62 * ll;
       // Fully closed: the upper lid edge tucks just under the lower lid everywhere.
       const closed = lower + Math.min(curveU, curveL) - 0.015;
-      let upper = lerp(closed, 1.18, clamp(f.lidUpper, 0, 1.3)) - pitch * 0.25 * clamp(f.lidUpper, 0, 1);
+      // Some faces rest with heavier upper lids (a calm, knowing look).
+      const lidU = f.lidUpper * (this.anatomy.face.lidRest ?? 1);
+      let upper = lerp(closed, 1.18, clamp(lidU, 0, 1.3)) - pitch * 0.25 * clamp(lidU, 0, 1);
       upper = lerp(upper, closed, blink);
       u.uLids.value.set(Math.max(upper, closed), lower, curveU, curveL);
       u.uClosed.value = clamp(1 - (upper - closed) / 0.35, 0, 1);
@@ -627,15 +751,16 @@ export class AlienRig {
       // Each eye converges slightly toward near targets (independent pupils).
       const px = clamp((yaw - pose.vergence * e.side) * 0.85, -0.42, 0.42);
       const py = clamp(-pitch * 0.85, -0.4, 0.4);
-      u.uPupilPos.value.set(px, py);
-      u.uPupilSize.value = clamp(0.22 + f.pupil * 0.5, 0.2, 0.66);
+      u.uPupilPos.value.set(px, py + (this.anatomy.face.irisLift ?? 0));
+      const base = this.anatomy.face.pupilBase ?? 0.28;
+      u.uPupilSize.value = clamp(base + f.pupil * 0.5, base - 0.06, 0.86);
     }
   }
 
   private updateBrows(f: Pose['face']) {
-    const scale = BROW_HALF[this.browShape] / 0.11;
+    const scale = (BROW_HALF[this.browShape] / 0.11) * this.anatomy.face.scale * (this.anatomy.face.browSize ?? 1);
     for (const b of this.brows) {
-      const raise = clamp(f.browRaise, -0.6, 1.3) * 0.044 + clamp(f.browAsym, -1.2, 1.2) * b.side * 0.026;
+      const raise = (clamp(f.browRaise, -0.6, 1.3) * 0.044 + clamp(f.browAsym, -1.2, 1.2) * b.side * 0.026) * this.anatomy.face.scale;
       const tilt = clamp(f.browTilt, -1.2, 1.2);
       b.anchor.position.copy(b.base).addScaledVector(b.up, raise);
       const u = b.mat.uniforms;
@@ -655,8 +780,8 @@ export class AlienRig {
     const open = clamp(f.mouthOpen, 0, 1.1);
     const round = clamp(f.mouthRound, 0, 1);
     const smile = clamp(f.smile, -1, 1.4);
-    const W = 0.14 * clamp(f.mouthWidth, 0.4, 1.6) * (1 - 0.22 * round) * (1 + 0.15 * open);
-    const minT = 0.024;
+    const W = 0.14 * (this.anatomy.face.mouthScale ?? 1) * clamp(f.mouthWidth, 0.4, 1.6) * (1 - 0.22 * round) * (1 + 0.15 * open);
+    const minT = 0.03 * (this.anatomy.face.lipWeight ?? 1);
     const out = this.patchScratch;
     for (let i = 0; i < MOUTH_COLS; i++) {
       const s = (i / (MOUTH_COLS - 1)) * 2 - 1;

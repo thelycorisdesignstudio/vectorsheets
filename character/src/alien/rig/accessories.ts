@@ -43,7 +43,7 @@ export function buildAccessories(a: Anatomy, at: Attach, palette: Palette): Map<
 
   // Collar: a plump ring that hides the neck and frames the head.
   {
-    const geo = new THREE.TorusGeometry(0.245, 0.1, 28, 72);
+    const geo = new THREE.TorusGeometry(0.27, 0.13, 32, 80);
     geo.rotateX(Math.PI / 2);
     const mat = createToonMaterial({ gradientAxis: 'x', gradient: [-0.3, 0.3] });
     const ring = new THREE.Mesh(geo, mat);

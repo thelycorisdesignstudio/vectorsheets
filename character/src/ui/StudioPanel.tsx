@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  BEHAVIOURS, BROW_LABELS, EXPRESSION_LABELS, EYE_SHAPES, PALETTES, REACTIONS, STATES, STATE_ORDER, ANIMATION_STYLES,
+  BEHAVIOURS, BROW_LABELS, LIGHT_RIG, EXPRESSION_LABELS, EYE_SHAPES, PALETTES, REACTIONS, STATES, STATE_ORDER, ANIMATION_STYLES,
   textToTimeline,
   type Accessory, type AnimationStyle, type Behaviour, type BrowShape, type CrownFeature, type EarStyle,
-  type ExpressionName, type EyeShape, type HeadShape, type PaletteName, type ReactionKind,
+  type ExpressionName, type EyeShape, type HairStyle, type HeadShape, type Outfit, type PaletteName, type ReactionKind,
 } from '../alien';
 import type { EmbodimentEvent } from '../embodiment/events';
 import type { Platform } from '../platform/createPlatform';
 import type { CameraView } from '../scene/Stage';
 
 export interface Appearance {
+  kind?: 'alien' | 'human';
+  figure?: 'lady' | 'man' | 'noor';
+  hair?: HairStyle;
+  outfit?: Outfit;
   palette: PaletteName;
   eyeShape: EyeShape;
   browShape: BrowShape;
@@ -30,14 +34,33 @@ export interface AnimSettings {
 }
 
 const HEADS: Record<HeadShape, string> = { puck: 'Puck', pebble: 'Pebble', bun: 'Bun' };
-const CROWNS: Record<CrownFeature, string> = { fronds: 'Fronds', buds: 'Buds', antennae: 'Antennae', ears: 'Ears', sprout: 'Sprout' };
+const CROWNS: Record<CrownFeature, string> = { fronds: 'Fronds', buds: 'Buds', antennae: 'Antennae', ears: 'Ears', sprout: 'Sprout', tendrils: 'Tendrils' };
 const EARS: Record<EarStyle, string> = { none: 'None', nubs: 'Nubs', fins: 'Fins' };
+const HAIR: Record<HairStyle, string> = { bob: 'Bob', lob: 'Long bob', waves: 'Long waves', ponytail: 'Ponytail', crop: 'Crop', curls: 'Curls', buzz: 'Buzz', puff: 'Puff' };
+const OUTFITS: Record<Outfit, string> = { casual: 'Casual', workout: 'Workout', dress: 'Dress' };
+const MAN_OUTFITS: Partial<Record<Outfit, string>> = { casual: 'Casual', workout: 'Workout' };
 const ACCESSORIES: Record<Accessory, string> = { collar: 'Collar', spectacles: 'Spectacles', bloom: 'Bloom' };
-const VIEWS: Record<CameraView, string> = { 'three-quarter': '¾', front: 'Front', side: 'Side', back: 'Back', close: 'Close' };
+const VIEWS: Record<CameraView, string> = { hero: 'Hero', 'three-quarter': '¾', front: 'Front', side: 'Side', back: 'Back', close: 'Close' };
 const EVENTS: EmbodimentEvent['type'][] = [
   'CHARACTER_GREETING', 'USER_STARTED_SPEAKING', 'USER_FINISHED_SPEAKING', 'AI_STARTED_THINKING',
   'AI_STARTED_SPEAKING', 'AI_FINISHED_SPEAKING', 'USER_INTERRUPTED', 'CONVERSATION_ENDED',
 ];
+
+/** Toggles the hand-drawn (illustrated) look for every character at once. */
+function RenderStyle() {
+  const [on, setOn] = useState(LIGHT_RIG.uIllustrate.value > 0.5);
+  const set = (v: boolean) => {
+    LIGHT_RIG.uIllustrate.value = v ? 1 : 0;
+    document.documentElement.classList.toggle('illustrated', v);
+    setOn(v);
+  };
+  return (
+    <div className="seg">
+      <button className={on ? 'on' : ''} onClick={() => set(true)}>Illustrated</button>
+      <button className={!on ? 'on' : ''} onClick={() => set(false)}>Soft 3D</button>
+    </div>
+  );
+}
 
 function Chips<T extends string>({ value, options, onChange }: { value?: T; options: Record<T, string>; onChange: (v: T) => void }) {
   return (
@@ -233,9 +256,12 @@ export function StudioPanel({ platform, appearance, setAppearance, anim, setAnim
       )}
       {tab === 'look' && (
         <>
+          <Section title="Render">
+            <RenderStyle />
+          </Section>
           <Section title="Palette">
             <div className="swatches">
-              {(Object.keys(PALETTES) as PaletteName[]).map((k) => {
+              {(Object.keys(PALETTES) as PaletteName[]).filter((k) => !!PALETTES[k].regions === (appearance.kind === 'human')).map((k) => {
                 const p = PALETTES[k];
                 return (
                   <button
@@ -250,11 +276,19 @@ export function StudioPanel({ platform, appearance, setAppearance, anim, setAnim
               })}
             </div>
           </Section>
-          <Section title="Anatomy">
+          {appearance.kind === 'human' && (
+            <Section title="Style">
+              <Row label="Hair"><Chips value={appearance.hair ?? 'bob'} options={HAIR} onChange={(v) => setAppearance('hair', v)} /></Row>
+              <Row label="Outfit">
+                <Chips value={appearance.outfit ?? 'casual'} options={(appearance.figure === 'man' ? MAN_OUTFITS : OUTFITS) as Record<Outfit, string>} onChange={(v) => setAppearance('outfit', v)} />
+              </Row>
+            </Section>
+          )}
+          {appearance.kind !== 'human' && <Section title="Anatomy">
             <Row label="Head"><Chips value={appearance.head} options={HEADS} onChange={(v) => setAppearance('head', v)} /></Row>
             <Row label="Crown"><Chips value={appearance.crown} options={CROWNS} onChange={(v) => setAppearance('crown', v)} /></Row>
             <Row label="Ears"><Chips value={appearance.ears} options={EARS} onChange={(v) => setAppearance('ears', v)} /></Row>
-          </Section>
+          </Section>}
           <Section title="Face">
             <Row label="Eyes"><Chips value={appearance.eyeShape} options={labels(EYE_SHAPES)} onChange={(v) => setAppearance('eyeShape', v)} /></Row>
             <Row label="Brows"><Chips value={appearance.browShape} options={BROW_LABELS} onChange={(v) => setAppearance('browShape', v)} /></Row>

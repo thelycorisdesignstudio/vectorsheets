@@ -38,13 +38,14 @@ function getWorker(): Worker | null {
 }
 
 export const anatomyKey = (spec: AnatomySpec, quality: RenderQuality) =>
-  `${spec.head}|${spec.ears}|${spec.crown}|${quality}`;
+  `${spec.kind ?? 'alien'}|${spec.figure ?? ''}|${spec.hair ?? ''}|${spec.outfit ?? ''}|${spec.head}|${spec.ears}|${spec.crown}|${quality}`;
 
 export function requestBodyMesh(spec: AnatomySpec, quality: RenderQuality): Promise<BodyMeshData> {
   const key = anatomyKey(spec, quality);
   const hit = cache.get(key);
   if (hit) return hit;
-  const cell = CELL_SIZE[quality];
+  // Humans are slimmer (smaller volume) but have fingers and fine features: sample finer.
+  const cell = CELL_SIZE[quality] * (spec.kind === 'human' ? 0.74 : 1);
   const w = getWorker();
   const promise = w
     ? new Promise<BodyMeshData>((resolve) => {

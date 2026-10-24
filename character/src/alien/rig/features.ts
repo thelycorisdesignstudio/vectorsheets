@@ -4,10 +4,10 @@ import { roundedProfile, sweptTube } from '../geometry/tube';
 
 /** Eye shape presets: half-size of the eye on the face and a lid slant. */
 export const EYE_SHAPES: Record<EyeShape, { size: [number, number]; lidTilt: number; label: string }> = {
-  oval: { size: [0.114, 0.136], lidTilt: 0, label: 'Oval' },
-  round: { size: [0.122, 0.122], lidTilt: 0, label: 'Round' },
-  almond: { size: [0.134, 0.104], lidTilt: 0.14, label: 'Almond' },
-  droplet: { size: [0.098, 0.146], lidTilt: -0.08, label: 'Droplet' },
+  oval: { size: [0.136, 0.158], lidTilt: 0, label: 'Oval' },
+  round: { size: [0.133, 0.133], lidTilt: 0, label: 'Round' },
+  almond: { size: [0.146, 0.113], lidTilt: 0.14, label: 'Almond' },
+  droplet: { size: [0.106, 0.158], lidTilt: -0.08, label: 'Droplet' },
 };
 
 export const BROW_LABELS: Record<BrowShape, string> = {
@@ -34,8 +34,8 @@ export function buildBrowGeometry(shape: BrowShape): THREE.BufferGeometry | null
   let pts: THREE.Vector3[];
   let profile: (t: number) => number;
   if (shape === 'pill') {
-    pts = [-0.11, -0.055, 0, 0.055, 0.11].map((x) => new THREE.Vector3(x, 0.014 * (1 - (x / 0.11) ** 2), wrap(x)));
-    profile = roundedProfile(0.04, 0.037, 0.26, 0.26);
+    pts = [-0.125, -0.0625, 0, 0.0625, 0.125].map((x) => new THREE.Vector3(x, 0.016 * (1 - (x / 0.125) ** 2), wrap(x)));
+    profile = roundedProfile(0.05, 0.046, 0.28, 0.28);
   } else if (shape === 'arched') {
     pts = [-0.1, -0.05, 0, 0.05, 0.1].map((x) => new THREE.Vector3(x, 0.034 * (1 - (x / 0.1) ** 2) - 0.01, wrap(x)));
     profile = roundedProfile(0.025, 0.02, 0.2, 0.2);

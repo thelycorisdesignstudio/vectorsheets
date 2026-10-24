@@ -47,6 +47,23 @@ interface Micro {
   flourish?: number;
 }
 
+/**
+ * Authored key poses (body channels). Like an animator's pose sheet: a few
+ * strong, readable silhouettes. `mirror` poses are flipped left/right at
+ * random; `states` lists where a pose fits.
+ */
+type IdleKey = 'headRz' | 'headRx' | 'headRy' | 'rootRz' | 'rootRx' | 'rootX' | 'armLz' | 'armRz' | 'armLx' | 'armRx' | 'elbowL' | 'elbowR';
+const POSE_LIBRARY: { name: string; weight: number; states: AnimationState[]; pose: Partial<Record<IdleKey, number>> }[] = [
+  { name: 'settle', weight: 1, states: ['idle', 'waiting', 'speaking', 'thinking'], pose: { headRx: 0.02 } },
+  { name: 'tilt', weight: 3, states: ['idle', 'waiting', 'listening', 'speaking'], pose: { headRz: 0.22, rootRz: -0.035, rootX: -0.016, headRx: 0.02 } },
+  { name: 'lean in', weight: 2.5, states: ['idle', 'waiting', 'listening', 'speaking'], pose: { rootRx: 0.075, headRx: -0.07, headRz: 0.12, armLz: 0.06, armRz: -0.06 } },
+  { name: 'peek', weight: 1.5, states: ['idle', 'waiting'], pose: { headRz: 0.28, headRy: 0.12, rootRz: -0.055, rootX: 0.035 } },
+  { name: 'hip shift', weight: 2, states: ['idle', 'waiting', 'listening'], pose: { rootRz: 0.065, rootX: 0.04, headRz: -0.1, armLz: 0.14, armRz: 0.03 } },
+  // The signature moment: a big, warm head tilt toward the viewer.
+  { name: 'hero lean', weight: 1.6, states: ['idle', 'waiting', 'listening'], pose: { headRz: 0.32, headRx: -0.07, headRy: 0.06, rootRz: -0.05, rootRx: 0.04, rootX: 0.02, armRz: -0.06 } },
+  { name: 'hands in', weight: 1.2, states: ['idle', 'waiting', 'listening'], pose: { armLx: -0.32, armRx: -0.32, armLz: -0.22, armRz: 0.22, elbowL: -0.25, elbowR: 0.25, headRz: 0.08, headRx: 0.03 } },
+];
+
 const MICROS: { name: string; weight: number; duration: number; face: Partial<FaceParams>; flourish?: number }[] = [
   { name: 'soft smile', weight: 3, duration: 1.8, face: { smile: 0.32, cheek: 0.3, lidLower: 0.18, blush: 0.2 } },
   { name: 'brow flash', weight: 2, duration: 0.55, face: { browRaise: 0.5, browArch: 0.35, lidUpper: 0.08, pupil: 0.06 } },
@@ -161,10 +178,13 @@ export class AnimationController {
   private lastExpression: ExpressionName = 'neutral';
   private flourish = 0;
   // Pose-to-pose idle: a relaxed pose is chosen, eased into slowly and held.
-  private idlePoseTarget = { headRz: 0, headRx: 0, headRy: 0, rootRz: 0, rootRx: 0, rootX: 0, armLz: 0, armRz: 0 };
+  private idlePoseTarget: Record<IdleKey, number> = { headRz: 0, headRx: 0, headRy: 0, rootRz: 0, rootRx: 0, rootX: 0, armLz: 0, armRz: 0, armLx: 0, armRx: 0, elbowL: 0, elbowR: 0 };
   private idlePose = new SpringRecord({ ...this.idlePoseTarget }, 1.7);
   private idlePoseTimer = 1.5;
   private poseSide = 1;
+  private poseName = 'settle';
+  /** the pose to settle into after the anticipation beat */
+  private posePending: { target: Record<IdleKey, number>; at: number } | null = null;
   private poseSprings = new SpringRecord(emptyChannels(), 4.5);
   private gazeYaw = new Spring(0, 26);
   private gazePitch = new Spring(0, 26);
@@ -262,20 +282,32 @@ export class AnimationController {
    */
   private nextIdlePose(hold: [number, number]) {
     const r = (a: number, b: number) => a + (b - a) * this.rnd();
-    if (this.rnd() < 0.75) this.poseSide *= -1;
-    const s = this.poseSide;
-    const scale = this.state === 'listening' ? 1.25 : this.state === 'speaking' ? 0.6 : this.state === 'thinking' ? 0.5 : 1;
-    const centred = this.rnd() < 0.22; // sometimes simply settle upright
-    const T = this.idlePoseTarget;
-    T.headRz = centred ? 0 : s * r(0.07, 0.17) * scale;
-    T.headRx = r(-0.03, 0.06) * scale;
-    T.headRy = r(-0.08, 0.08) * scale;
-    T.rootRz = centred ? 0 : -s * r(0.01, 0.035) * scale;
-    T.rootRx = r(0, 0.03) * scale;
-    T.rootX = -s * r(0, 0.02) * scale;
-    T.armLz = r(-0.04, 0.08) * scale;
-    T.armRz = -r(-0.04, 0.08) * scale;
+    const options = POSE_LIBRARY.filter((p) => p.states.includes(this.state) && p.name !== this.poseName);
+    const scale = this.state === 'listening' ? 1.2 : this.state === 'speaking' ? 0.6 : this.state === 'thinking' ? 0.5 : 1;
     this.idlePoseTimer = r(hold[0], hold[1]) * (this.state === 'speaking' ? 0.5 : 1);
+    if (!options.length) return;
+    let roll = this.rnd() * options.reduce((a, p) => a + p.weight, 0);
+    const pick = options.find((p) => (roll -= p.weight) <= 0) ?? options[0];
+    this.poseName = pick.name;
+    if (this.rnd() < 0.7) this.poseSide *= -1;
+    const s = this.poseSide;
+    const next = {} as Record<IdleKey, number>;
+    for (const k of Object.keys(this.idlePoseTarget) as IdleKey[]) {
+      const v = (pick.pose[k] ?? 0) * scale * r(0.85, 1.1);
+      // Mirror left/right: roll, sideways shift and yaw flip; arms swap sides.
+      next[k] = k === 'headRz' || k === 'rootRz' || k === 'rootX' || k === 'headRy' ? v * s : v;
+    }
+    if (s < 0) {
+      [next.armLz, next.armRz] = [-next.armRz, -next.armLz];
+      [next.armLx, next.armRx] = [next.armRx, next.armLx];
+      [next.elbowL, next.elbowR] = [-next.elbowR, -next.elbowL];
+    }
+    // Anticipation: a small move the other way first, then the pose itself.
+    const T = this.idlePoseTarget;
+    const anticipation = {} as Record<IdleKey, number>;
+    for (const k of Object.keys(T) as IdleKey[]) anticipation[k] = T[k] - (next[k] - T[k]) * 0.18;
+    Object.assign(T, anticipation);
+    this.posePending = { target: next, at: this.time + 0.32 };
   }
 
   private startMicro(name?: string) {
@@ -480,7 +512,11 @@ export class AnimationController {
     // Weighted, held poses carry most of the life; only a whisper of noise stays on top.
     this.idlePoseTimer -= dt;
     if (this.idlePoseTimer <= 0 || (sf.phraseStart && this.state === 'speaking')) this.nextIdlePose(style.poseHold);
-    const ip = this.idlePose.update(this.idlePoseTarget, dt, 1.5 * (0.8 + 0.4 * energy));
+    if (this.posePending && this.time >= this.posePending.at) {
+      Object.assign(this.idlePoseTarget, this.posePending.target);
+      this.posePending = null;
+    }
+    const ip = this.idlePose.update(this.idlePoseTarget, dt, (this.posePending ? 2.6 : 1.5) * (0.8 + 0.4 * energy));
     const poseAmp = intensity * style.idleAmp * (this.state === 'sleep' ? 0.3 : 1);
     for (const k in ip) idle(k as (typeof CHANNELS)[number], ip[k as keyof typeof ip] * poseAmp);
     idle('rootRz', fbm1(t * 0.11) * 0.008 * amp);

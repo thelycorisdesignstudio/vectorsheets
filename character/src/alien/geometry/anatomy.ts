@@ -1,6 +1,6 @@
-import type { CrownFeature, EarStyle, HeadShape } from '../types';
+import type { CrownFeature, EarStyle, HairStyle, HeadShape, Outfit } from '../types';
 import {
-  type Leaf, type V3, add, makeLeaf, normalize, sdEllipsoid, sdLeaf, sdRoundCone, smin,
+  type Leaf, type V3, add, cross, makeLeaf, normalize, sdEllipsoid, sdLeaf, sdRoundCone, smin,
 } from './sdf';
 
 /**
@@ -16,19 +16,43 @@ import {
 
 export const PART = { body: 0, head: 1, armL: 2, armR: 3, earL: 4, earR: 5, crown: 6 } as const;
 export const PART_COUNT = 7;
-/** Bone slots: parts plus forearms (split from the arm part by the elbow). */
-export const BONE = { hips: 0, head: 1, armL: 2, armR: 3, earL: 4, earR: 5, crown: 6, foreL: 7, foreR: 8 } as const;
+/** Bone slots: parts plus forearms and hands (split from the arm part at the elbow and wrist). */
+export const BONE = { hips: 0, head: 1, armL: 2, armR: 3, earL: 4, earR: 5, crown: 6, foreL: 7, foreR: 8, handL: 9, handR: 10 } as const;
 /** Each crown lobe gets its own bone after the fixed ones. */
-export const LOBE_BONE_BASE = 9;
+export const LOBE_BONE_BASE = 11;
 export const MAX_LOBES = 8;
 
 export interface AnatomySpec {
   head: HeadShape;
   ears: EarStyle;
   crown: CrownFeature;
+  /** species: the alien (default) or a stylised human */
+  kind?: 'alien' | 'human';
+  /** human figure */
+  figure?: 'lady' | 'man' | 'noor';
+  hair?: HairStyle;
+  outfit?: Outfit;
 }
 
-interface HeadDef {
+/** A bangle worn on a forearm: arm index, position along elbow→hand (0..1), colour, tube radius. */
+export interface Bangle {
+  arm: 0 | 1;
+  t: number;
+  color: string;
+  tube: number;
+}
+
+/** Resting arm pose offsets (radians), added under every animated pose. */
+export interface RestPose {
+  armLx: number; armLz: number; elbowLx: number; elbowL: number;
+  armRx: number; armRz: number; elbowRx: number; elbowR: number;
+  /** forearm twist (turns the palm), and a resting head tilt */
+  elbowLy?: number; elbowRy?: number; armLy?: number; armRy?: number; headRz?: number;
+  /** wrist twist (shares the palm turn with the forearm so the elbow never pinches) */
+  handLy?: number; handRy?: number;
+}
+
+export interface HeadDef {
   c: V3;
   rx: number;
   ry: number;
@@ -37,13 +61,16 @@ interface HeadDef {
   bulge: number;
   /** extra rounding of the back of the head */
   backBulge: number;
+  /** squircle exponent of the face outline (2 = ellipse, higher = squarer) */
+  squircle: number;
   jowl?: { c: V3; r: V3; k: number };
 }
 
 const HEADS: Record<HeadShape, HeadDef> = {
-  puck: { c: [0, 1.5, 0], rx: 0.72, ry: 0.56, depth: 0.2, round: 0.15, bulge: 0.05, backBulge: 0.16 },
-  pebble: { c: [0, 1.52, 0], rx: 0.62, ry: 0.62, depth: 0.25, round: 0.22, bulge: 0.08, backBulge: 0.14 },
-  bun: { c: [0, 1.53, 0], rx: 0.64, ry: 0.53, depth: 0.21, round: 0.17, bulge: 0.05, backBulge: 0.15, jowl: { c: [0, 1.31, 0.02], r: [0.62, 0.32, 0.3], k: 0.14 } },
+  // A thick disc: flat friendly face plane, crisp but soft bevel, fuller back.
+  puck: { c: [0, 1.86, 0], rx: 0.76, ry: 0.6, depth: 0.34, round: 0.27, bulge: 0.07, backBulge: 0.16, squircle: 2.25 },
+  pebble: { c: [0, 1.88, 0], rx: 0.67, ry: 0.66, depth: 0.28, round: 0.2, bulge: 0.06, backBulge: 0.13, squircle: 2 },
+  bun: { c: [0, 1.89, 0], rx: 0.7, ry: 0.56, depth: 0.25, round: 0.15, bulge: 0.03, backBulge: 0.13, squircle: 2.2, jowl: { c: [0, 1.66, 0.02], r: [0.66, 0.33, 0.3], k: 0.14 } },
 };
 
 /** A crown lobe: a round cone, optionally flattened front-to-back. */
@@ -53,6 +80,8 @@ export interface Lobe {
   r1: number;
   r2: number;
   flat: number;
+  /** thin axis for paddle-shaped lobes (flattened in the lobe's own frame) */
+  n?: V3;
 }
 
 export interface EyeLandmark {
@@ -61,35 +90,115 @@ export interface EyeLandmark {
   side: 1 | -1;
 }
 
+/** Face layout relative to the head centre (scaled per character). */
+export interface FaceLayout {
+  /** overall scale of eyes, brows and mouth (1 = Oru) */
+  scale: number;
+  eyeSpread: number;
+  eyeLift: number;
+  /** brow height above the eye centre */
+  browOffset: number;
+  /** mouth distance below the head centre */
+  mouthOffset: number;
+  blush: { dx: number; dy: number; rx: number; ry: number };
+  /** strength of a drawn upper lash line (0 = none) */
+  liner?: number;
+  /** eye rendering: 'flat' graphic eyes (white disc, solid pupil) or 'glossy' irises with catchlights */
+  eyeStyle?: 'flat' | 'glossy';
+  /** eye size relative to the face scale (1 = default) */
+  eyeSize?: number;
+  /** mouth width relative to the face scale (1 = default) */
+  mouthScale?: number;
+  /** eye height relative to width (1 = the eye shape's own; < 1 = wider almond) */
+  eyeAspect?: number;
+  /** brow size relative to the face scale (1 = default) */
+  browSize?: number;
+  /** raises the iris so the upper lid tucks over its top (drawn-eye look) */
+  irisLift?: number;
+  /** closed-mouth line thickness relative to default */
+  lipWeight?: number;
+  /** freckle strength (0 = none) */
+  freckles?: number;
+  /** resting pupil/iris size as a fraction of the eye (Oru: big, dark, glossy) */
+  pupilBase?: number;
+  /** resting openness of the upper lids (1 = fully open) */
+  lidRest?: number;
+}
+
 export class Anatomy {
   readonly spec: AnatomySpec;
-  readonly head: HeadDef;
-  readonly headCenter: V3;
-  readonly neck: V3 = [0, 0.98, 0];
-  readonly crownPivot: V3;
+  head: HeadDef;
+  headCenter: V3;
+  neck: V3 = [0, 1.3, 0];
+  crownPivot: V3;
+  face: FaceLayout = {
+    scale: 1, eyeSpread: 0.255, eyeLift: 0.06, browOffset: 0.205, mouthOffset: 0.165,
+    blush: { dx: 0.45, dy: -0.12, rx: 0.125, ry: 0.08 },
+    // Graphic eyes: small round whites with one solid, wandering pupil.
+    eyeStyle: 'flat', eyeSize: 0.9, pupilBase: 0.3,
+  };
+  /** touch collider for the body: centre + radii */
+  bellyCollider: { c: V3; r: V3 } = { c: [0, 0.75, 0.02], r: [0.42, 0.5, 0.34] };
+  /** foot x offset (for contact shadows) */
+  footX = 0.185;
+  /** model-space height range that jiggles like soft jelly */
+  wobbleRange: [number, number] = [1.5, 3.1];
   lobes: Lobe[] = [];
+  /** bangles on the forearms (separate rings, coloured individually) */
+  /** resting arm pose (a relaxed stance instead of an A-pose) */
+  restPose: RestPose = { armLx: 0, armLz: 0, elbowLx: 0, elbowL: 0, armRx: 0, armRz: 0, elbowRx: 0, elbowR: 0 };
+  /** strength of painted cheek blush (1 = full) */
+  blushStrength = 1;
+  /** how far arm gestures swing (long human arms hang closer and need more lift) */
+  armSwing = 1;
+  /** trainer sole top and sock start heights (model space); off by default */
+  footwear = { soleY: -1, sockY: 99 };
+  bangles: Bangle[] = [];
   ears: Leaf[] = [];
   eyes: EyeLandmark[] = [];
   /** Eye ellipse half-size on the face plane */
   readonly eyeSize: [number, number] = [0.1, 0.122];
-  readonly shoulders: [V3, V3] = [[0.27, 0.86, 0], [-0.27, 0.86, 0]];
-  readonly elbows: [V3, V3] = [[0.43, 0.63, 0.03], [-0.43, 0.63, 0.03]];
-  readonly hands: [V3, V3] = [[0.49, 0.41, 0.07], [-0.49, 0.41, 0.07]];
-  private partBounds: [number, number, number, number][] = [];
+  // Thick, straight arms from broad shoulders, hanging out about 25 degrees.
+  // The elbow lies on the straight line so the rest pose shows no kink.
+  shoulders: [V3, V3] = [[0.25, 1.13, 0], [-0.25, 1.13, 0]];
+  elbows: [V3, V3] = [[0.425, 0.88, 0.035], [-0.425, 0.88, 0.035]];
+  hands: [V3, V3] = [[0.6, 0.63, 0.07], [-0.6, 0.63, 0.07]];
+  protected partBounds: [number, number, number, number][] = [];
   private scratch = new Float32Array(PART_COUNT);
 
   constructor(spec: AnatomySpec) {
     this.spec = spec;
     this.head = HEADS[spec.head] ?? HEADS.puck;
     this.headCenter = this.head.c;
-    this.crownPivot = [0, this.head.c[1] + this.head.ry * 0.7, -0.05];
+    this.crownPivot = [0, this.head.c[1] + 0.08, -0.12];
+    this.setup();
+  }
+
+  /** (Re)builds derived landmarks; subclasses call it after setting their own dimensions. */
+  protected setup() {
+    this.lobes = [];
+    this.ears = [];
+    this.eyes = [];
     this.buildCrown();
     this.buildEars();
     this.computeBounds();
     this.placeEyes();
   }
 
-  private buildCrown() {
+  /**
+   * Colour regions for clothed characters: writes [hair, shirt, pants, shoes]
+   * weights into `out` and returns true, or returns false (no regions).
+   */
+  /** Extra baked shading (1 = none), e.g. the shadow a head casts on the neck. */
+  castShade(_x: number, _y: number, _z: number): number {
+    return 1;
+  }
+
+  regions(_x: number, _y: number, _z: number, _w: Float32Array, _out: Float32Array): boolean {
+    return false;
+  }
+
+  protected buildCrown() {
     const h = this.head;
     const [cx, cy] = h.c;
     const rim = (deg: number, inset = 0.78, z = -0.1): V3 => {
@@ -103,14 +212,23 @@ export class Anatomy {
       this.lobes.push({ a, b: add(a, dir, len), r1, r2, flat });
     };
     switch (this.spec.crown) {
-      case 'fronds':
-        // Five chunky fingers, deliberately uneven so the silhouette has personality.
-        lobe(-68, 0.3, 0.12, 0.14, 0.72, -0.2, 0.7);
-        lobe(-36, 0.4, 0.125, 0.152, 0.72, -0.18, 0.66);
-        lobe(-3, 0.45, 0.13, 0.158, 0.72, -0.16, 0.62);
-        lobe(31, 0.38, 0.125, 0.15, 0.72, -0.18, 0.66);
-        lobe(63, 0.28, 0.115, 0.138, 0.72, -0.2, 0.7);
+      case 'fronds': {
+        // Six long, flat paddles fanning out from behind the head, overlapping at
+        // the base and widening toward rounded tips. Lengths are deliberately uneven.
+        const P = this.crownPivot;
+        // Seven wide, flat paddles that touch and merge into one continuous fan.
+        const fan: [number, number, number][] = [[-96, 0.88, 0.17], [-65, 1.0, 0.185], [-34, 1.1, 0.195], [-3, 1.14, 0.2], [28, 1.09, 0.195], [58, 1.0, 0.185], [87, 0.87, 0.17]];
+        for (const [deg, len, rTip] of fan) {
+          const rad = (deg * Math.PI) / 180;
+          // Lean back more toward the top so the mane frames the face from behind.
+          const back = -0.3 - 0.25 * Math.cos(rad);
+          const dir = normalize([Math.sin(rad), Math.cos(rad) * 0.95, back]);
+          const side: V3 = [Math.cos(rad), -Math.sin(rad), 0];
+          const n = normalize(cross(dir, side));
+          this.lobes.push({ a: add(P, dir, 0.3), b: add(P, dir, len), r1: 0.11, r2: rTip, flat: 0.62, n });
+        }
         break;
+      }
       case 'buds':
         for (const [deg, len, r] of [[-78, 0.1, 0.13], [-52, 0.14, 0.15], [-24, 0.17, 0.16], [6, 0.18, 0.165], [34, 0.15, 0.155], [60, 0.12, 0.14], [82, 0.08, 0.12]] as const) {
           lobe(deg, len, r * 0.9, r, 0.82, -0.05, 0.86);
@@ -130,12 +248,26 @@ export class Anatomy {
         this.lobes.push({ a: b, b: d, r1: 0.04, r2: 0.08, flat: 0.45 });
         break;
       }
+      case 'tendrils': {
+        // Three short, plump tendrils on top and two long floppy ones hanging
+        // at the sides like pigtails. Round in section, with soft bulb tips.
+        for (const [deg, len] of [[-30, 0.3], [0, 0.4], [30, 0.3]] as const) {
+          const a = rim(deg, 0.82, -0.06);
+          const rad = (deg * Math.PI) / 180;
+          this.lobes.push({ a, b: add(a, normalize([Math.sin(rad) * 0.75, 1, -0.32]), len), r1: 0.12, r2: 0.13, flat: 1 });
+        }
+        for (const side of [1, -1] as const) {
+          const a = rim(76 * side, 0.86, -0.06);
+          this.lobes.push({ a, b: add(a, normalize([0.26 * side, -1, -0.05]), 0.66), r1: 0.15, r2: 0.155, flat: 1 });
+        }
+        break;
+      }
       case 'antennae':
         break;
     }
   }
 
-  private buildEars() {
+  protected buildEars() {
     const h = this.head;
     for (const side of [1, -1] as const) {
       if (this.spec.ears === 'fins') {
@@ -149,11 +281,11 @@ export class Anatomy {
     }
   }
 
-  private placeEyes() {
+  protected placeEyes() {
     const [cx, cy] = this.head.c;
     for (const side of [1, -1] as const) {
-      const x = cx + 0.235 * side;
-      const y = cy + 0.04;
+      const x = cx + this.face.eyeSpread * side;
+      const y = cy + this.face.eyeLift;
       const hit = this.raycast([x, y, 2], [0, 0, -1], this.headOnly);
       const p = hit ? hit.p : ([x, y, 0.3] as V3);
       const n = hit ? hit.n : ([0, 0, 1] as V3);
@@ -163,10 +295,12 @@ export class Anatomy {
 
   // --- Field ----------------------------------------------------------------
 
-  private headField(x: number, y: number, z: number) {
+  protected headField(x: number, y: number, z: number) {
     const h = this.head;
     const px = x - h.c[0], py = y - h.c[1], pz = z - h.c[2];
-    const er = Math.sqrt((px / h.rx) ** 2 + (py / h.ry) ** 2);
+    // Squircle outline: rounder-square than an ellipse, like a soft disc.
+    const q = h.squircle;
+    const er = (Math.abs(px / h.rx) ** q + Math.abs(py / h.ry) ** q) ** (1 / q);
     // Distance to an elliptical rim (approximate, scaled by the minor radius).
     const radial = (er - 1) * Math.min(h.rx, h.ry) * (er > 1 ? 1 : 0.92);
     // Face and back of the head are gently domed.
@@ -183,33 +317,48 @@ export class Anatomy {
     return d;
   }
 
-  private crownField(x: number, y: number, z: number) {
+  protected crownField(x: number, y: number, z: number) {
+    if (!this.lobes.length) return 1e3;
     let d = 1e9;
     for (const l of this.lobes) {
-      // Flatten front-to-back around the lobe's own origin.
-      const zz = l.a[2] + (z - l.a[2]) / l.flat;
-      const bz = l.a[2] + (l.b[2] - l.a[2]) / l.flat;
-      const dl = sdRoundCone(x, y, zz, l.a[0], l.a[1], l.a[2], l.b[0], l.b[1], bz, l.r1, l.r2) * l.flat;
-      d = d === 1e9 ? dl : smin(d, dl, 0.05);
+      let dl: number;
+      if (l.n) {
+        // Paddle: flatten along the lobe's own thin axis.
+        const px = x - l.a[0], py = y - l.a[1], pz = z - l.a[2];
+        const pn = px * l.n[0] + py * l.n[1] + pz * l.n[2];
+        const s = (1 / l.flat - 1) * pn;
+        dl = sdRoundCone(x + l.n[0] * s, y + l.n[1] * s, z + l.n[2] * s, l.a[0], l.a[1], l.a[2], l.b[0], l.b[1], l.b[2], l.r1, l.r2) * l.flat;
+      } else {
+        // Flatten front-to-back around the lobe's own origin.
+        const zz = l.a[2] + (z - l.a[2]) / l.flat;
+        const bz = l.a[2] + (l.b[2] - l.a[2]) / l.flat;
+        dl = sdRoundCone(x, y, zz, l.a[0], l.a[1], l.a[2], l.b[0], l.b[1], bz, l.r1, l.r2) * l.flat;
+      }
+      d = d === 1e9 ? dl : smin(d, dl, l.n ? 0.04 : 0.05);
     }
     return d;
   }
 
-  private bodyField(x: number, y: number, z: number) {
-    let d = sdEllipsoid(x, y - 0.63, z, 0.33, 0.35, 0.27);
-    d = smin(d, sdEllipsoid(x, y - 0.5, z - 0.025, 0.34, 0.25, 0.28), 0.1);
-    d = smin(d, sdRoundCone(x, y, z, 0, 0.88, 0, 0, 1.08, 0, 0.16, 0.15), 0.08);
+  protected bodyField(x: number, y: number, z: number) {
+    // Gummy-bear torso: broad rounded shoulders, a soft belly, wide hips.
+    let d = sdEllipsoid(x, y - 1.0, z, 0.37, 0.34, 0.29);
+    d = smin(d, sdEllipsoid(x, y - 0.8, z - 0.03, 0.37, 0.28, 0.3), 0.12);
+    d = smin(d, sdEllipsoid(x, y - 0.63, z, 0.36, 0.2, 0.28), 0.1);
+    d = smin(d, sdRoundCone(x, y, z, 0, 1.18, 0, 0, 1.42, 0, 0.17, 0.15), 0.08);
+    // Two thick columns for legs, almost as wide as the hips, with a small gap.
     const ax = Math.abs(x);
-    d = smin(d, sdRoundCone(ax, y, z, 0.145, 0.42, 0, 0.16, 0.11, 0.02, 0.118, 0.122), 0.07);
-    d = smin(d, sdEllipsoid(ax - 0.165, y - 0.075, z - 0.065, 0.128, 0.075, 0.16), 0.06);
-    return d;
+    d = smin(d, sdRoundCone(ax, y, z, 0.18, 0.62, 0, 0.185, 0.17, 0.02, 0.168, 0.165), 0.08);
+    // Feet: the leg end turns gently forward onto a flat sole.
+    d = smin(d, sdEllipsoid(ax - 0.185, y - 0.09, z - 0.07, 0.17, 0.095, 0.2), 0.08);
+    return Math.max(d, -y);
   }
 
-  private armField(x: number, y: number, z: number, i: 0 | 1) {
+  protected armField(x: number, y: number, z: number, i: 0 | 1) {
     const s = this.shoulders[i], e = this.elbows[i], h = this.hands[i];
-    let d = sdRoundCone(x, y, z, s[0], s[1], s[2], e[0], e[1], e[2], 0.1, 0.09);
-    d = smin(d, sdRoundCone(x, y, z, e[0], e[1], e[2], h[0], h[1], h[2], 0.09, 0.094), 0.04);
-    d = smin(d, sdEllipsoid(x - h[0], y - h[1] + 0.02, z - h[2], 0.108, 0.115, 0.1), 0.05);
+    // Thick tube, barely tapering, ending in a rounded, slightly flattened paddle.
+    let d = sdRoundCone(x, y, z, s[0], s[1], s[2], e[0], e[1], e[2], 0.15, 0.135);
+    d = smin(d, sdRoundCone(x, y, z, e[0], e[1], e[2], h[0], h[1], h[2], 0.135, 0.128), 0.04);
+    d = smin(d, sdEllipsoid(x - h[0] - 0.012 * Math.sign(h[0]), y - h[1] + 0.03, z - h[2], 0.145, 0.15, 0.105), 0.06);
     return d;
   }
 
@@ -230,13 +379,13 @@ export class Anatomy {
         case PART.armR: out[i] = this.armField(x, y, z, 1); break;
         case PART.earL: out[i] = sdLeaf(x, y, z, this.ears[0]); break;
         case PART.earR: out[i] = sdLeaf(x, y, z, this.ears[1]); break;
-        default: out[i] = this.lobes.length ? this.crownField(x, y, z) : 1e3;
+        default: out[i] = this.crownField(x, y, z);
       }
     }
     return out;
   }
 
-  private computeBounds() {
+  protected computeBounds() {
     const h = this.head;
     const sphereOf = (pts: V3[], pad: number): [number, number, number, number] => {
       const c: V3 = [0, 0, 0];
@@ -248,13 +397,13 @@ export class Anatomy {
     const crownPts: V3[] = this.lobes.flatMap((l) => [l.a, l.b]);
     const leaf = (L: Leaf) => sphereOf([L.root, add(L.root, L.u, L.length)], Math.max(L.width, L.length * 0.1) + 0.03);
     this.partBounds = [
-      [0, 0.6, 0, 0.62],
+      [0, 0.75, 0, 0.86],
       [h.c[0], h.c[1] - (h.jowl ? 0.05 : 0), h.c[2], Math.hypot(Math.max(h.rx, h.ry), h.depth + h.bulge) + 0.08],
       sphereOf([this.shoulders[0], this.elbows[0], this.hands[0]], 0.13),
       sphereOf([this.shoulders[1], this.elbows[1], this.hands[1]], 0.13),
       leaf(this.ears[0]),
       leaf(this.ears[1]),
-      crownPts.length ? sphereOf(crownPts, 0.18) : [0, -50, 0, 0.1],
+      crownPts.length ? sphereOf(crownPts, Math.max(...this.lobes.map((l) => l.r2)) + 0.08) : [0, -50, 0, 0.1],
     ];
   }
 
@@ -291,6 +440,11 @@ export class Anatomy {
     return null;
   }
 
+  /** Forearm radius at fraction t from elbow to hand (used to fit bangles). */
+  armRadiusAt(_arm: 0 | 1, t: number) {
+    return 0.135 + (0.128 - 0.135) * t;
+  }
+
   /** Antenna base points (crown 'antennae'). */
   antennaBases(): { base: V3; dir: V3 }[] {
     if (this.spec.crown !== 'antennae') return [];
@@ -305,7 +459,6 @@ export class Anatomy {
   }
 
   bounds(): { min: V3; max: V3 } {
-    return { min: [-1.0, -0.03, -0.48], max: [1.0, 2.66, 0.52] };
+    return { min: [-1.14, -0.03, -0.82], max: [1.14, 3.2, 0.6] };
   }
 }
-

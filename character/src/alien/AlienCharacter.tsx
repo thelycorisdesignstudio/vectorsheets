@@ -8,7 +8,7 @@ import { AlienRig } from './rig/AlienRig';
 import { resolvePalette } from './config/palettes';
 import { ANIMATION_STYLES } from './config/states';
 import type {
-  Accessory, AnimationState, Behaviour, BrowShape, CrownFeature, EarStyle, ExpressionName, EyeShape,
+  Accessory, AnimationState, Behaviour, BrowShape, CharacterKind, CrownFeature, EarStyle, ExpressionName, EyeShape, HairStyle, HumanFigure, Outfit,
   HeadShape, Palette, PaletteName, RenderQuality, TouchZone,
 } from './types';
 
@@ -22,6 +22,12 @@ export interface AlienCharacterProps {
   behaviour?: Behaviour;
   /** Facial expression override (art direction / dev tools). */
   expression?: ExpressionName;
+  /** Which body to build: the alien species or a human figure. */
+  kind?: CharacterKind;
+  figure?: HumanFigure;
+  /** Human hairstyle and outfit (defaults per figure). */
+  hair?: HairStyle;
+  outfit?: Outfit;
   palette?: PaletteName | Palette;
   eyeShape?: EyeShape;
   browShape?: BrowShape;
@@ -58,6 +64,10 @@ export function AlienCharacter({
   animation,
   behaviour,
   expression,
+  kind = 'alien',
+  figure = 'lady',
+  hair,
+  outfit = 'casual',
   palette = 'grape',
   eyeShape = 'oval',
   browShape = 'pill',
@@ -77,7 +87,7 @@ export function AlienCharacter({
   rotation,
   scale,
 }: AlienCharacterProps) {
-  const spec = useMemo(() => ({ head, ears, crown }), [head, ears, crown]);
+  const spec = useMemo(() => ({ head, ears, crown, kind, figure, hair, outfit }), [head, ears, crown, kind, figure, hair, outfit]);
   const [data, setData] = useState<BodyMeshData | null>(null);
   const internal = useRef<AnimationController | null>(null);
   if (!external && !internal.current) internal.current = new AnimationController();
@@ -193,6 +203,7 @@ export function AlienCharacter({
     }
     const pose = controller.update(dt, input);
     rig.update(pose, Math.min(dt, 1 / 20));
+    rig.updateLighting(camera);
   });
 
   if (import.meta.env.DEV && rig) {

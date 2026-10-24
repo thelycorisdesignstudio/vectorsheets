@@ -39,12 +39,20 @@ export type ExpressionName =
   | 'determined'
   | 'confused';
 
-export type PaletteName = 'grape' | 'tangerine' | 'mint' | 'bubblegum' | 'lagoon';
+export type PaletteName = 'grape' | 'tangerine' | 'mint' | 'bubblegum' | 'lagoon' | 'mira' | 'theo' | 'noor';
+
+/** Which character body to build. */
+export type CharacterKind = 'alien' | 'human';
+export type HumanFigure = 'lady' | 'man' | 'noor';
+/** Human hairstyles (any figure can wear any style). */
+export type HairStyle = 'bob' | 'lob' | 'waves' | 'ponytail' | 'crop' | 'curls' | 'buzz' | 'puff';
+/** Human outfits: everyday clothes, gym wear, or a sundress. */
+export type Outfit = 'casual' | 'workout' | 'dress';
 export type EyeShape = 'oval' | 'round' | 'almond' | 'droplet';
 export type BrowShape = 'pill' | 'arched' | 'tuft' | 'dots' | 'none';
 export type HeadShape = 'puck' | 'pebble' | 'bun';
 export type EarStyle = 'none' | 'nubs' | 'fins';
-export type CrownFeature = 'fronds' | 'buds' | 'antennae' | 'ears' | 'sprout';
+export type CrownFeature = 'fronds' | 'buds' | 'antennae' | 'ears' | 'sprout' | 'tendrils';
 export type Accessory = 'collar' | 'spectacles' | 'bloom';
 export type AnimationStyle = 'gentle' | 'playful' | 'snappy';
 export type RenderQuality = 'high' | 'balanced' | 'low';
@@ -117,6 +125,12 @@ export interface Palette {
   base: string;
   /** Lower body colour (vertical gradient end) */
   baseLow: string;
+  /** Lightest shade at the top of the head (three-stop blend); defaults to base */
+  high?: string;
+  /** Soft lighter tint airbrushed over the face; omitted = none */
+  face?: string;
+  /** Soft-vinyl sheen colour glowing at grazing angles */
+  sheen?: string;
   /** Crown tips gradient colour */
   tip: string;
   /** Tint multiplied into shaded areas (keeps shadows colourful, never grey) */
@@ -136,6 +150,10 @@ export interface Palette {
   collarB: string;
   /** Antenna bulbs / glow details */
   glow: string;
+  /** Clothed characters: colours for hair and clothing regions */
+  regions?: { hair: string; shirt: string; pants: string; shoes: string };
+  /** Clothing colours for the other outfits (hair comes from regions) */
+  outfits?: Partial<Record<Outfit, { shirt: string; pants: string; shoes: string }>>;
 }
 
 export interface CharacterAppearance {

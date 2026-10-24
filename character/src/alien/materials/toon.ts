@@ -34,6 +34,12 @@ export type ToonMaterial = THREE.ShaderMaterial & {
   uniforms: {
     uColor: { value: THREE.Color };
     uColorLow: { value: THREE.Color };
+    uColorHigh: { value: THREE.Color };
+    uFace: { value: THREE.Color };
+    uFaceAmt: { value: number };
+    uFaceC: { value: THREE.Vector3 };
+    uFaceR: { value: THREE.Vector2 };
+    uSheen: { value: THREE.Color };
     uTip: { value: THREE.Color };
     uBlush: { value: THREE.Color };
     uBlushAmount: { value: number };
@@ -49,6 +55,19 @@ export type ToonMaterial = THREE.ShaderMaterial & {
     uBrowArch: { value: number };
     uBrowSide: { value: number };
     uBrowHalf: { value: number };
+    uWobble: { value: THREE.Vector3 };
+    uWobbleRange: { value: THREE.Vector2 };
+    uHair: { value: THREE.Color };
+    uShirt: { value: THREE.Color };
+    uPants: { value: THREE.Color };
+    uShoes: { value: THREE.Color };
+    uClothShadow: { value: THREE.Color };
+    uHairShadow: { value: THREE.Color };
+    uFreckles: { value: number };
+    uSole: { value: THREE.Color };
+    uSock: { value: THREE.Color };
+    uSoleY: { value: number };
+    uSockY: { value: number };
   };
 };
 
@@ -63,15 +82,20 @@ uniform float uBrowOuter;
 uniform float uBrowArch;
 uniform float uBrowSide;
 uniform float uBrowHalf;
+uniform vec3 uWobble;
+uniform vec2 uWobbleRange;
 #ifdef USE_MASKS
 attribute vec4 aMask;
 attribute float aAO;
+attribute vec4 aRegion;
 varying vec4 vMask;
 varying float vAO;
+varying vec4 vRegion;
 #endif
 varying vec3 vNormalV;
 varying vec3 vRest;
 varying vec3 vViewDir;
+varying vec3 vViewPos;
 void main() {
   #include <beginnormal_vertex>
   #include <skinbase_vertex>
@@ -89,15 +113,20 @@ void main() {
   float cheekMask = smoothstep(-0.9, 0.45, aMask.z);
   transformed += objectNormal * uCheek * cheekMask * 0.02;
   transformed.y -= uJaw * aMask.x * 0.032;
+  // Soft-body lag: the head and crown trail motion like a firm jelly.
+  float wob = smoothstep(uWobbleRange.x, uWobbleRange.y, position.y);
+  transformed += uWobble * wob * wob;
   #endif
   #include <skinning_vertex>
   #include <project_vertex>
   vNormalV = normalize(transformedNormal);
   vRest = position;
   vViewDir = normalize(-mvPosition.xyz);
+  vViewPos = mvPosition.xyz;
   #ifdef USE_MASKS
   vMask = aMask;
   vAO = aAO;
+  vRegion = aRegion;
   #endif
 }
 `;
@@ -105,6 +134,12 @@ void main() {
 const fragment = /* glsl */ `
 uniform vec3 uColor;
 uniform vec3 uColorLow;
+uniform vec3 uColorHigh;
+uniform vec3 uFace;
+uniform float uFaceAmt;
+uniform vec3 uFaceC;
+uniform vec2 uFaceR;
+uniform vec3 uSheen;
 uniform vec3 uTip;
 uniform vec3 uBlush;
 uniform float uBlushAmount;
@@ -116,9 +151,23 @@ uniform float uSpecScale;
 varying vec3 vNormalV;
 varying vec3 vRest;
 varying vec3 vViewDir;
+varying vec3 vViewPos;
+uniform vec3 uHair;
+uniform vec3 uShirt;
+uniform vec3 uPants;
+uniform vec3 uShoes;
+uniform vec3 uClothShadow;
+uniform vec3 uHairShadow;
+uniform float uFreckles;
+uniform vec3 uSole;
+uniform vec3 uSock;
+uniform float uSoleY;
+uniform float uSockY;
+float frHash(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 15731.743); }
 #ifdef USE_MASKS
 varying vec4 vMask;
 varying float vAO;
+varying vec4 vRegion;
 #endif
 ${LIGHT_RIG_GLSL}
 void main() {
@@ -132,13 +181,50 @@ void main() {
   vec3 albedo = mix(uColorLow, uColor, g);
   float ao = 1.0;
   #ifdef USE_MASKS
-  albedo = mix(uColorLow, uColor, vMask.w);
+  // Three-stop vertical blend: deeper at the feet, light and airy at the top.
+  albedo = mix(uColorLow, uColor, smoothstep(0.0, 0.55, vMask.w));
+  albedo = mix(albedo, uColorHigh, smoothstep(0.5, 1.0, vMask.w));
+  // A soft lighter glow across the face, airbrushed in (no edge anywhere).
+  vec2 fq = (vRest.xy - uFaceC.xy) / uFaceR;
+  float faceW = (1.0 - smoothstep(0.25, 1.05, length(fq))) * smoothstep(uFaceC.z - 0.05, uFaceC.z + 0.22, vRest.z);
+  albedo = mix(albedo, uFace, faceW * uFaceAmt);
   albedo = mix(albedo, uTip, smoothstep(0.0, 1.0, vMask.y));
   float blushEdge = fwidth(vMask.z) * 1.2 + 0.004;
-  albedo = mix(albedo, uBlush, smoothstep(-blushEdge, blushEdge, vMask.z) * uBlushAmount);
+  // Blush: a clean oval with a soft, slightly brushed edge.
+  albedo = mix(albedo, uBlush, smoothstep(-blushEdge, 0.14, vMask.z) * 0.85 * uBlushAmount);
   ao = mix(0.5, 1.0, vAO);
+  // Clothed characters: crisp colour regions for hair and clothes.
+  vec4 rg = smoothstep(0.3, 0.7, vRegion);
+  albedo = mix(albedo, uHair, rg.x);
+  albedo = mix(albedo, uShirt, rg.y);
+  albedo = mix(albedo, uPants, rg.z);
+  albedo = mix(albedo, uShoes, rg.w);
+  // Trainers: a white sole under the upper, and socks above the collar.
+  albedo = mix(albedo, uSole, rg.w * (1.0 - smoothstep(uSoleY - 0.004, uSoleY + 0.004, vRest.y)));
+  albedo = mix(albedo, uSock, rg.w * smoothstep(uSockY - 0.006, uSockY + 0.006, vRest.y));
+  // Freckles: a light scatter of small dots across the nose and cheeks.
+  if (uFreckles > 0.0) {
+    vec2 fp = vRest.xy * 150.0;
+    vec2 cell = floor(fp);
+    float dotMask = 1.0 - smoothstep(0.16, 0.3, length(fract(fp) - 0.5 - (vec2(frHash(cell), frHash(cell + 7.1)) - 0.5) * 0.3));
+    float keep = step(0.8, frHash(cell + 3.7));
+    float zone = smoothstep(-1.1, -0.3, vMask.z) * step(0.0, vRest.z) * (1.0 - max(max(rg.x, rg.y), max(rg.z, rg.w)));
+    albedo = mix(albedo, albedo * vec3(0.84, 0.66, 0.58), dotMask * keep * zone * uFreckles);
+  }
+  float cloth = max(max(rg.x, rg.y), max(rg.z, rg.w));
+  vec3 shadowMul = mix(mix(uShadowMul, uClothShadow, cloth), uHairShadow, rg.x);
+  #else
+  vec3 shadowMul = uShadowMul;
   #endif
-  vec3 col = rigLight(albedo, N, normalize(vViewDir), uShadowMul, ao, uShade, uSpecScale);
+  vec3 V = normalize(vViewDir);
+  #ifdef USE_MASKS
+  vec3 col = rigLightW(albedo, N, V, vViewPos, shadowMul, ao, uShade, uSpecScale, 1.0 - cloth);
+  #else
+  vec3 col = rigLight(albedo, N, V, vViewPos, shadowMul, ao, uShade, uSpecScale);
+  #endif
+  // Soft-vinyl sheen: light seems to glow just under the surface at the rim.
+  float graze = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.6);
+  col += uSheen * graze * 0.3 * ao;
   gl_FragColor = vec4(col, uOpacity);
   #include <colorspace_fragment>
 }
@@ -157,6 +243,12 @@ export function createToonMaterial(o: ToonOptions = {}): ToonMaterial {
     uniforms: {
       uColor: { value: color },
       uColorLow: { value: new THREE.Color(o.colorLow ?? color) },
+      uColorHigh: { value: new THREE.Color(o.colorLow ?? color) },
+      uFace: { value: new THREE.Color('#ffffff') },
+      uFaceAmt: { value: 0 },
+      uFaceC: { value: new THREE.Vector3(0, 1.86, 0.2) },
+      uFaceR: { value: new THREE.Vector2(0.6, 0.5) },
+      uSheen: { value: new THREE.Color('#000000') },
       uTip: { value: new THREE.Color('#ffffff') },
       uBlush: { value: new THREE.Color('#ff7a9a') },
       uBlushAmount: { value: 1 },
@@ -172,6 +264,19 @@ export function createToonMaterial(o: ToonOptions = {}): ToonMaterial {
       uBrowArch: { value: 0 },
       uBrowSide: { value: 1 },
       uBrowHalf: { value: 0.11 },
+      uWobble: { value: new THREE.Vector3() },
+      uWobbleRange: { value: new THREE.Vector2(1.5, 3.1) },
+      uHair: { value: new THREE.Color('#000000') },
+      uShirt: { value: new THREE.Color('#ffffff') },
+      uPants: { value: new THREE.Color('#000000') },
+      uShoes: { value: new THREE.Color('#000000') },
+      uClothShadow: { value: new THREE.Color(0.62, 0.64, 0.74) },
+      uHairShadow: { value: new THREE.Color(0.8, 0.62, 0.58) },
+      uFreckles: { value: 0 },
+      uSole: { value: new THREE.Color('#ffffff') },
+      uSock: { value: new THREE.Color('#ffffff') },
+      uSoleY: { value: -1 },
+      uSockY: { value: 99 },
       ...LIGHT_RIG,
     },
     vertexShader: vertex,
