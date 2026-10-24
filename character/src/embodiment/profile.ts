@@ -68,7 +68,7 @@ export const ORU_PROFILE: CharacterProfile = {
     head: 'puck',
     crown: 'fronds',
     ears: 'none',
-    eyeShape: 'oval',
+    eyeShape: 'round',
     browShape: 'pill',
     accessories: [],
   },

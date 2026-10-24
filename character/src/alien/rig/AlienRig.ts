@@ -264,6 +264,9 @@ export class AlienRig {
       group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), v3(lm.normal).lerp(new THREE.Vector3(0, 0, 1), 0.3).normalize());
       const mat = createEyeMaterial(lm.side, 1);
       mat.uniforms.uLiner.value = this.anatomy.face.liner ?? 0;
+      const flat = this.anatomy.face.eyeStyle === 'flat';
+      mat.uniforms.uFlat.value = flat ? 1 : 0;
+      mat.uniforms.uCatch.value = flat ? 0 : 0.35;
       const mesh = new THREE.Mesh(this.eyeGeo, mat);
       mesh.renderOrder = 1;
       group.add(mesh);
@@ -531,7 +534,8 @@ export class AlienRig {
   setEyeShape(shape: EyeShape) {
     this.eyeShape = shape;
     const fs = this.anatomy.face.scale;
-    const [sx, sy] = EYE_SHAPES[shape].size.map((v) => v * fs);
+    const es = this.anatomy.face.eyeSize ?? 1;
+    const [sx, sy] = EYE_SHAPES[shape].size.map((v) => v * fs * es);
     for (const e of this.eyes) {
       e.mesh.scale.set(sx, sy, 0.034 * fs);
       e.mat.uniforms.uAspect.value = sy / sx;
@@ -551,7 +555,7 @@ export class AlienRig {
       const geo = base.clone();
       const fs = this.anatomy.face.scale;
       // Slimmer than sculpted: soft, friendly brows rather than heavy slabs.
-      geo.scale(fs, fs * 0.8, fs);
+      geo.scale(fs, fs * (this.anatomy.face.eyeStyle === 'flat' ? 1.05 : 0.8), fs);
       if (b.side < 0) {
         geo.scale(-1, 1, 1);
         // Mirroring flips the winding; restore it so the brow stays solid.
@@ -722,7 +726,8 @@ export class AlienRig {
       const sq = clamp(f.eyeSquash, 0.75, 1.2);
       e.group.scale.set(sc * (1 + (1 - sq) * 0.35), sc * sq * (1 - blink * 0.1), 1);
       // Lower lid rises into a crescent for smiling eyes.
-      const ll = clamp(f.lidLower, 0, 1.1);
+      // Flat graphic eyes rest as full circles: the lower lid only rises with a smile.
+      const ll = clamp(f.lidLower - (this.anatomy.face.eyeStyle === 'flat' ? 0.14 : 0), 0, 1.1);
       const lower = lerp(-1.25, 0.12, ll);
       const curveU = 0.22 + 0.1 * (1 - clamp(f.lidUpper, 0, 1));
       const curveL = 0.18 + 0.62 * ll;

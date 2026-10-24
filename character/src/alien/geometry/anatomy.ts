@@ -103,6 +103,10 @@ export interface FaceLayout {
   blush: { dx: number; dy: number; rx: number; ry: number };
   /** strength of a drawn upper lash line (0 = none) */
   liner?: number;
+  /** eye rendering: 'flat' graphic eyes (white disc, solid pupil) or 'glossy' irises with catchlights */
+  eyeStyle?: 'flat' | 'glossy';
+  /** eye size relative to the face scale (1 = default) */
+  eyeSize?: number;
   /** mouth width relative to the face scale (1 = default) */
   mouthScale?: number;
   /** resting pupil/iris size as a fraction of the eye (Oru: big, dark, glossy) */
@@ -118,8 +122,10 @@ export class Anatomy {
   neck: V3 = [0, 1.3, 0];
   crownPivot: V3;
   face: FaceLayout = {
-    scale: 1, eyeSpread: 0.29, eyeLift: 0.05, browOffset: 0.232, mouthOffset: 0.165,
-    blush: { dx: 0.45, dy: -0.12, rx: 0.125, ry: 0.08 }, pupilBase: 0.5,
+    scale: 1, eyeSpread: 0.255, eyeLift: 0.06, browOffset: 0.205, mouthOffset: 0.165,
+    blush: { dx: 0.45, dy: -0.12, rx: 0.125, ry: 0.08 },
+    // Graphic eyes: small round whites with one solid, wandering pupil.
+    eyeStyle: 'flat', eyeSize: 0.9, pupilBase: 0.3,
   };
   /** touch collider for the body: centre + radii */
   bellyCollider: { c: V3; r: V3 } = { c: [0, 0.75, 0.02], r: [0.42, 0.5, 0.34] };

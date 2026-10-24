@@ -22,6 +22,7 @@ export type EyeMaterial = THREE.ShaderMaterial & {
     uSide: { value: number };
     uAspect: { value: number };
     uCatch: { value: number };
+    uFlat: { value: number };
     uClosed: { value: number };
     uLash: { value: THREE.Color };
     uLiner: { value: number };
@@ -43,6 +44,7 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
       uAspect: { value: aspect },
       ...LIGHT_RIG,
       uCatch: { value: 0.35 },
+      uFlat: { value: 0 },
       uClosed: { value: 0 },
       uLash: { value: new THREE.Color('#5530c9') },
       uLiner: { value: 0 },
@@ -76,6 +78,7 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
       uniform float uSide;
       uniform float uAspect;
       uniform float uCatch;
+      uniform float uFlat;
       uniform float uClosed;
       uniform vec3 uLash;
       uniform float uLiner;
@@ -103,13 +106,15 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
         float pupil = 1.0 - smoothstep(uPupilSize - pa, uPupilSize + pa, r);
         // Sclera: soft spherical shading toward the rim for volume.
         float rr = dot(p, p);
-        vec3 sclera = uSclera * mix(1.0, 0.86, smoothstep(0.35, 1.0, rr));
+        vec3 sclera = uSclera * mix(1.0, mix(0.86, 0.96, uFlat), smoothstep(0.35, 1.0, rr));
         // Iris: light pools in the lower half, a darker limbal ring at the edge
         // and a deep core, so a big dark eye still reads as glossy and alive.
         float ry = d.y / max(uPupilSize, 1e-3);
         vec3 irisCol = mix(uPupil * 0.9, uPupil * 1.9 + 0.05, smoothstep(0.1, -0.85, ry));
         irisCol = mix(irisCol, uPupil * 0.55, smoothstep(uPupilSize * 0.78, uPupilSize, r));
         vec3 pupilCol = mix(uPupil * 0.3, irisCol, smoothstep(uPupilSize * 0.42 - pa, uPupilSize * 0.42 + pa, r));
+        // Flat (graphic) eyes: one solid pupil, just a breath lighter at the bottom.
+        pupilCol = mix(pupilCol, uPupil * mix(1.0, 1.12, smoothstep(0.2, -0.9, ry)), uFlat);
         vec3 eye = mix(sclera, pupilCol, pupil);
         // Catchlights stay with the light; they ride half of the pupil motion.
         vec2 cp = p - (vec2(-0.3 * uSide - 0.08, 0.36) + uPupilPos * 0.5);
@@ -119,7 +124,7 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
         eye = mix(eye, vec3(1.0), max(c1, c2 * 0.85) * uCatch * mix(0.35, 1.0, pupil));
         // Gentle shadow cast by the upper lid onto the eyeball.
         float lidShade = smoothstep(upper - 0.32, upper, p.y) * (1.0 - lidU);
-        eye *= mix(1.0, 0.86, lidShade);
+        eye *= mix(1.0, mix(0.86, 0.95, uFlat), lidShade);
         // Thin darker crease where the lid meets the eye.
         float creaseU = smoothstep(upper + aa, upper + aa + 0.06, p.y);
         vec3 skinLit = rigLight(uSkin, normalize(vFaceN), normalize(vView), vViewPos, uShadowMul, 1.0, 1.0, 1.0);
