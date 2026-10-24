@@ -1,6 +1,6 @@
 import type { CrownFeature, EarStyle, HeadShape } from '../types';
 import {
-  type Leaf, type V3, add, cross, makeLeaf, normalize, sdEllipsoid, sdLeaf, sdRoundCone, smin,
+  type Leaf, type V3, add, cross, makeLeaf, normalize, sdEllipsoid, sdLeaf, sdRoundCone, smax, smin,
 } from './sdf';
 
 /**
@@ -77,10 +77,11 @@ export class Anatomy {
   eyes: EyeLandmark[] = [];
   /** Eye ellipse half-size on the face plane */
   readonly eyeSize: [number, number] = [0.1, 0.122];
-  // Long, soft arms that reach mid-thigh.
-  readonly shoulders: [V3, V3] = [[0.29, 1.17, 0], [-0.29, 1.17, 0]];
-  readonly elbows: [V3, V3] = [[0.46, 0.9, 0.04], [-0.46, 0.9, 0.04]];
-  readonly hands: [V3, V3] = [[0.52, 0.64, 0.08], [-0.52, 0.64, 0.08]];
+  // Thick, straight arms from broad shoulders, hanging out about 25 degrees.
+  // The elbow lies on the straight line so the rest pose shows no kink.
+  readonly shoulders: [V3, V3] = [[0.25, 1.13, 0], [-0.25, 1.13, 0]];
+  readonly elbows: [V3, V3] = [[0.425, 0.88, 0.035], [-0.425, 0.88, 0.035]];
+  readonly hands: [V3, V3] = [[0.6, 0.63, 0.07], [-0.6, 0.63, 0.07]];
   private partBounds: [number, number, number, number][] = [];
   private scratch = new Float32Array(PART_COUNT);
 
@@ -222,22 +223,31 @@ export class Anatomy {
   }
 
   private bodyField(x: number, y: number, z: number) {
-    // Chest, a soft belly and hips that flow into long, sturdy legs.
-    let d = sdEllipsoid(x, y - 0.96, z, 0.35, 0.36, 0.28);
-    d = smin(d, sdEllipsoid(x, y - 0.82, z - 0.03, 0.36, 0.27, 0.29), 0.1);
-    d = smin(d, sdEllipsoid(x, y - 0.66, z + 0.01, 0.31, 0.17, 0.25), 0.08);
+    // Gummy-bear torso: broad rounded shoulders, a soft belly, wide hips.
+    let d = sdEllipsoid(x, y - 1.0, z, 0.37, 0.34, 0.29);
+    d = smin(d, sdEllipsoid(x, y - 0.8, z - 0.03, 0.37, 0.28, 0.3), 0.12);
+    d = smin(d, sdEllipsoid(x, y - 0.63, z, 0.36, 0.2, 0.28), 0.1);
     d = smin(d, sdRoundCone(x, y, z, 0, 1.18, 0, 0, 1.42, 0, 0.17, 0.15), 0.08);
+    // Two thick columns for legs, almost as wide as the hips, with a small gap.
     const ax = Math.abs(x);
-    d = smin(d, sdRoundCone(ax, y, z, 0.15, 0.66, 0, 0.165, 0.13, 0.02, 0.135, 0.14), 0.07);
-    d = smin(d, sdEllipsoid(ax - 0.17, y - 0.08, z - 0.07, 0.14, 0.085, 0.17), 0.06);
-    return d;
+    d = smin(d, sdRoundCone(ax, y, z, 0.18, 0.62, 0, 0.185, 0.17, 0.02, 0.168, 0.165), 0.08);
+    // Feet: the leg end turns gently forward onto a flat sole.
+    d = smin(d, sdEllipsoid(ax - 0.185, y - 0.09, z - 0.07, 0.17, 0.095, 0.2), 0.08);
+    d = Math.max(d, -y);
+    // A small V crease where the legs meet the belly.
+    const groove = Math.min(
+      sdRoundCone(ax, y, z, 0.16, 0.69, 0.25, 0, 0.575, 0.285, 0.009, 0.009),
+      sdRoundCone(ax, y, z, 0, 0.575, 0.285, 0, 0.5, 0.27, 0.009, 0.006),
+    );
+    return smax(d, -groove, 0.035);
   }
 
   private armField(x: number, y: number, z: number, i: 0 | 1) {
     const s = this.shoulders[i], e = this.elbows[i], h = this.hands[i];
-    let d = sdRoundCone(x, y, z, s[0], s[1], s[2], e[0], e[1], e[2], 0.118, 0.102);
-    d = smin(d, sdRoundCone(x, y, z, e[0], e[1], e[2], h[0], h[1], h[2], 0.102, 0.104), 0.04);
-    d = smin(d, sdEllipsoid(x - h[0], y - h[1] + 0.025, z - h[2], 0.122, 0.13, 0.112), 0.05);
+    // Thick tube, barely tapering, ending in a rounded, slightly flattened paddle.
+    let d = sdRoundCone(x, y, z, s[0], s[1], s[2], e[0], e[1], e[2], 0.15, 0.135);
+    d = smin(d, sdRoundCone(x, y, z, e[0], e[1], e[2], h[0], h[1], h[2], 0.135, 0.128), 0.04);
+    d = smin(d, sdEllipsoid(x - h[0] - 0.012 * Math.sign(h[0]), y - h[1] + 0.03, z - h[2], 0.145, 0.15, 0.105), 0.06);
     return d;
   }
 
@@ -276,7 +286,7 @@ export class Anatomy {
     const crownPts: V3[] = this.lobes.flatMap((l) => [l.a, l.b]);
     const leaf = (L: Leaf) => sphereOf([L.root, add(L.root, L.u, L.length)], Math.max(L.width, L.length * 0.1) + 0.03);
     this.partBounds = [
-      [0, 0.75, 0, 0.82],
+      [0, 0.75, 0, 0.86],
       [h.c[0], h.c[1] - (h.jowl ? 0.05 : 0), h.c[2], Math.hypot(Math.max(h.rx, h.ry), h.depth + h.bulge) + 0.08],
       sphereOf([this.shoulders[0], this.elbows[0], this.hands[0]], 0.13),
       sphereOf([this.shoulders[1], this.elbows[1], this.hands[1]], 0.13),
