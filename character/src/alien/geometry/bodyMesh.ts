@@ -48,6 +48,7 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
   const softness = [0.04, 0.04, 0.025, 0.025, 0.03, 0.03, 0.035];
   const h = anatomy.head;
   const F = anatomy.face;
+  const headTop = anatomy.head.c[1] + anatomy.head.ry;
   const blushC = [1, -1].map((s) => [h.c[0] + F.blush.dx * s, h.c[1] + F.blush.dy]);
 
   for (let v = 0; v < count; v++) {
@@ -143,7 +144,8 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
     const mouthY = h.c[1] - F.mouthOffset;
     masks[v * 4] = sstep(mouthY + 0.02 * F.scale, mouthY - 0.14 * F.scale, y) * sstep(0.2, 0.6, nz) * (1 - sstep(0.22 * F.scale, 0.48 * F.scale, Math.abs(x))) * w[PART.head];
     if (anatomy.regions(x, y, z, w, reg)) regions.set(reg, v * 4);
-    masks[v * 4 + 3] = w[PART.head] + w[PART.crown] + w[PART.earL] + w[PART.earR] > 0.5 ? 1 : sstep(0.0, anatomy.neck[1], y);
+    // One continuous blend from the feet to the top of the head (no seam at the neck).
+    masks[v * 4 + 3] = sstep(0.0, headTop, y);
 
     // --- Ambient occlusion -------------------------------------------------
     let occ = 0;

@@ -121,6 +121,12 @@ export interface Palette {
   base: string;
   /** Lower body colour (vertical gradient end) */
   baseLow: string;
+  /** Lightest shade at the top of the head (three-stop blend); defaults to base */
+  high?: string;
+  /** Soft lighter tint airbrushed over the face; omitted = none */
+  face?: string;
+  /** Soft-vinyl sheen colour glowing at grazing angles */
+  sheen?: string;
   /** Crown tips gradient colour */
   tip: string;
   /** Tint multiplied into shaded areas (keeps shadows colourful, never grey) */

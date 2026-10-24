@@ -34,6 +34,12 @@ export type ToonMaterial = THREE.ShaderMaterial & {
   uniforms: {
     uColor: { value: THREE.Color };
     uColorLow: { value: THREE.Color };
+    uColorHigh: { value: THREE.Color };
+    uFace: { value: THREE.Color };
+    uFaceAmt: { value: number };
+    uFaceC: { value: THREE.Vector3 };
+    uFaceR: { value: THREE.Vector2 };
+    uSheen: { value: THREE.Color };
     uTip: { value: THREE.Color };
     uBlush: { value: THREE.Color };
     uBlushAmount: { value: number };
@@ -122,6 +128,12 @@ void main() {
 const fragment = /* glsl */ `
 uniform vec3 uColor;
 uniform vec3 uColorLow;
+uniform vec3 uColorHigh;
+uniform vec3 uFace;
+uniform float uFaceAmt;
+uniform vec3 uFaceC;
+uniform vec2 uFaceR;
+uniform vec3 uSheen;
 uniform vec3 uTip;
 uniform vec3 uBlush;
 uniform float uBlushAmount;
@@ -156,14 +168,20 @@ void main() {
   vec3 albedo = mix(uColorLow, uColor, g);
   float ao = 1.0;
   #ifdef USE_MASKS
-  albedo = mix(uColorLow, uColor, vMask.w);
+  // Three-stop vertical blend: deeper at the feet, light and airy at the top.
+  albedo = mix(uColorLow, uColor, smoothstep(0.0, 0.55, vMask.w));
+  albedo = mix(albedo, uColorHigh, smoothstep(0.5, 1.0, vMask.w));
+  // A soft lighter glow across the face, airbrushed in (no edge anywhere).
+  vec2 fq = (vRest.xy - uFaceC.xy) / uFaceR;
+  float faceW = (1.0 - smoothstep(0.25, 1.05, length(fq))) * smoothstep(uFaceC.z - 0.05, uFaceC.z + 0.22, vRest.z);
+  albedo = mix(albedo, uFace, faceW * uFaceAmt);
   albedo = mix(albedo, uTip, smoothstep(0.0, 1.0, vMask.y));
   float blushEdge = fwidth(vMask.z) * 1.2 + 0.004;
   // Airbrushed blush: soft from the rim, densest in the middle.
   albedo = mix(albedo, uBlush, smoothstep(-blushEdge, 0.6, vMask.z) * 0.78 * uBlushAmount);
   ao = mix(0.5, 1.0, vAO);
   // Clothed characters: crisp colour regions for hair and clothes.
-  vec4 rg = smoothstep(0.38, 0.62, vRegion);
+  vec4 rg = smoothstep(0.3, 0.7, vRegion);
   albedo = mix(albedo, uHair, rg.x);
   albedo = mix(albedo, uShirt, rg.y);
   albedo = mix(albedo, uPants, rg.z);
@@ -173,7 +191,11 @@ void main() {
   #else
   vec3 shadowMul = uShadowMul;
   #endif
-  vec3 col = rigLight(albedo, N, normalize(vViewDir), vViewPos, shadowMul, ao, uShade, uSpecScale);
+  vec3 V = normalize(vViewDir);
+  vec3 col = rigLight(albedo, N, V, vViewPos, shadowMul, ao, uShade, uSpecScale);
+  // Soft-vinyl sheen: light seems to glow just under the surface at the rim.
+  float graze = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.6);
+  col += uSheen * graze * 0.3 * ao;
   gl_FragColor = vec4(col, uOpacity);
   #include <colorspace_fragment>
 }
@@ -192,6 +214,12 @@ export function createToonMaterial(o: ToonOptions = {}): ToonMaterial {
     uniforms: {
       uColor: { value: color },
       uColorLow: { value: new THREE.Color(o.colorLow ?? color) },
+      uColorHigh: { value: new THREE.Color(o.colorLow ?? color) },
+      uFace: { value: new THREE.Color('#ffffff') },
+      uFaceAmt: { value: 0 },
+      uFaceC: { value: new THREE.Vector3(0, 1.86, 0.2) },
+      uFaceR: { value: new THREE.Vector2(0.6, 0.5) },
+      uSheen: { value: new THREE.Color('#000000') },
       uTip: { value: new THREE.Color('#ffffff') },
       uBlush: { value: new THREE.Color('#ff7a9a') },
       uBlushAmount: { value: 1 },

@@ -251,8 +251,9 @@ export class AlienRig {
   private buildEyes() {
     for (const lm of this.anatomy.eyes) {
       const group = new THREE.Group();
-      group.position.copy(this.toHead(lm.center)).addScaledVector(v3(lm.normal), -0.006);
-      group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), v3(lm.normal).lerp(new THREE.Vector3(0, 0, 1), 0.5).normalize());
+      // Set into the face (not stuck on): sunk slightly and following the surface.
+      group.position.copy(this.toHead(lm.center)).addScaledVector(v3(lm.normal), -0.013 * this.anatomy.face.scale);
+      group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), v3(lm.normal).lerp(new THREE.Vector3(0, 0, 1), 0.3).normalize());
       const mat = createEyeMaterial(lm.side, 1);
       mat.uniforms.uLiner.value = this.anatomy.face.liner ?? 0;
       const mesh = new THREE.Mesh(this.eyeGeo, mat);
@@ -453,10 +454,30 @@ export class AlienRig {
     this.footMat.color.set(color).multiplyScalar(0.8);
   }
 
+  /** The body shader's blended skin colour at a rest-pose point (mirrors toon.ts). */
+  private skinColorAt(pt: THREE.Vector3, p: Palette) {
+    const u = this.skinMat.uniforms;
+    const top = this.anatomy.head.c[1] + this.anatomy.head.ry;
+    const w = smoothstep(0, top, pt.y);
+    const c = new THREE.Color(p.baseLow).lerp(new THREE.Color(p.base), smoothstep(0, 0.55, w));
+    c.lerp(new THREE.Color(p.high ?? p.base), smoothstep(0.5, 1, w));
+    const fc = u.uFaceC.value, fr = u.uFaceR.value;
+    const len = Math.hypot((pt.x - fc.x) / fr.x, (pt.y - fc.y) / fr.y);
+    const fw = (1 - smoothstep(0.25, 1.05, len)) * smoothstep(fc.z - 0.05, fc.z + 0.22, pt.z);
+    return c.lerp(new THREE.Color(p.face ?? p.base), fw * u.uFaceAmt.value);
+  }
+
   setPalette(p: Palette) {
     const u = this.skinMat.uniforms;
     u.uColor.value.set(p.base);
     u.uColorLow.value.set(p.baseLow);
+    u.uColorHigh.value.set(p.high ?? p.base);
+    u.uFace.value.set(p.face ?? p.base);
+    u.uFaceAmt.value = p.face ? 0.55 : 0;
+    const h = this.anatomy.head;
+    u.uFaceC.value.set(h.c[0], h.c[1] + this.anatomy.face.eyeLift * 0.5, h.c[2] + h.depth * 0.4);
+    u.uFaceR.value.set(h.rx * 0.95, h.ry * 0.95);
+    u.uSheen.value.set(p.sheen ?? '#000000');
     u.uTip.value.set(p.tip);
     u.uBlush.value.set(p.blush);
     shadowMultiplier(p.shadow, p.base, u.uShadowMul.value);
@@ -479,7 +500,8 @@ export class AlienRig {
     for (const e of this.eyes) {
       e.mat.uniforms.uSclera.value.set(p.sclera);
       e.mat.uniforms.uPupil.value.set(p.pupil);
-      e.mat.uniforms.uSkin.value.set(p.base);
+      // Lids must match the blended skin right around the eye, or they show as patches.
+      e.mat.uniforms.uSkin.value.copy(this.skinColorAt(e.group.position.clone().add(this.neck), p));
       e.mat.uniforms.uLash.value.set(p.brow);
       shadowMultiplier(p.shadow, p.base, e.mat.uniforms.uShadowMul.value);
     }
@@ -517,7 +539,8 @@ export class AlienRig {
       if (!base) continue;
       const geo = base.clone();
       const fs = this.anatomy.face.scale;
-      geo.scale(fs, fs, fs);
+      // Slimmer than sculpted: soft, friendly brows rather than heavy slabs.
+      geo.scale(fs, fs * 0.8, fs);
       if (b.side < 0) {
         geo.scale(-1, 1, 1);
         // Mirroring flips the winding; restore it so the brow stays solid.
@@ -730,7 +753,7 @@ export class AlienRig {
     const round = clamp(f.mouthRound, 0, 1);
     const smile = clamp(f.smile, -1, 1.4);
     const W = 0.14 * clamp(f.mouthWidth, 0.4, 1.6) * (1 - 0.22 * round) * (1 + 0.15 * open);
-    const minT = 0.024;
+    const minT = 0.03;
     const out = this.patchScratch;
     for (let i = 0; i < MOUTH_COLS; i++) {
       const s = (i / (MOUTH_COLS - 1)) * 2 - 1;
