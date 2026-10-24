@@ -37,13 +37,16 @@ interface HeadDef {
   bulge: number;
   /** extra rounding of the back of the head */
   backBulge: number;
+  /** squircle exponent of the face outline (2 = ellipse, higher = squarer) */
+  squircle: number;
   jowl?: { c: V3; r: V3; k: number };
 }
 
 const HEADS: Record<HeadShape, HeadDef> = {
-  puck: { c: [0, 1.5, 0], rx: 0.72, ry: 0.56, depth: 0.2, round: 0.15, bulge: 0.05, backBulge: 0.16 },
-  pebble: { c: [0, 1.52, 0], rx: 0.62, ry: 0.62, depth: 0.25, round: 0.22, bulge: 0.08, backBulge: 0.14 },
-  bun: { c: [0, 1.53, 0], rx: 0.64, ry: 0.53, depth: 0.21, round: 0.17, bulge: 0.05, backBulge: 0.15, jowl: { c: [0, 1.31, 0.02], r: [0.62, 0.32, 0.3], k: 0.14 } },
+  // A thick disc: flat friendly face plane, crisp but soft bevel, fuller back.
+  puck: { c: [0, 1.86, 0], rx: 0.76, ry: 0.6, depth: 0.29, round: 0.15, bulge: 0.025, backBulge: 0.13, squircle: 2.25 },
+  pebble: { c: [0, 1.88, 0], rx: 0.67, ry: 0.66, depth: 0.28, round: 0.2, bulge: 0.06, backBulge: 0.13, squircle: 2 },
+  bun: { c: [0, 1.89, 0], rx: 0.7, ry: 0.56, depth: 0.25, round: 0.15, bulge: 0.03, backBulge: 0.13, squircle: 2.2, jowl: { c: [0, 1.66, 0.02], r: [0.66, 0.33, 0.3], k: 0.14 } },
 };
 
 /** A crown lobe: a round cone, optionally flattened front-to-back. */
@@ -65,16 +68,17 @@ export class Anatomy {
   readonly spec: AnatomySpec;
   readonly head: HeadDef;
   readonly headCenter: V3;
-  readonly neck: V3 = [0, 0.98, 0];
+  readonly neck: V3 = [0, 1.3, 0];
   readonly crownPivot: V3;
   lobes: Lobe[] = [];
   ears: Leaf[] = [];
   eyes: EyeLandmark[] = [];
   /** Eye ellipse half-size on the face plane */
   readonly eyeSize: [number, number] = [0.1, 0.122];
-  readonly shoulders: [V3, V3] = [[0.27, 0.86, 0], [-0.27, 0.86, 0]];
-  readonly elbows: [V3, V3] = [[0.43, 0.63, 0.03], [-0.43, 0.63, 0.03]];
-  readonly hands: [V3, V3] = [[0.49, 0.41, 0.07], [-0.49, 0.41, 0.07]];
+  // Long, soft arms that reach mid-thigh.
+  readonly shoulders: [V3, V3] = [[0.29, 1.17, 0], [-0.29, 1.17, 0]];
+  readonly elbows: [V3, V3] = [[0.46, 0.9, 0.04], [-0.46, 0.9, 0.04]];
+  readonly hands: [V3, V3] = [[0.52, 0.64, 0.08], [-0.52, 0.64, 0.08]];
   private partBounds: [number, number, number, number][] = [];
   private scratch = new Float32Array(PART_COUNT);
 
@@ -82,7 +86,7 @@ export class Anatomy {
     this.spec = spec;
     this.head = HEADS[spec.head] ?? HEADS.puck;
     this.headCenter = this.head.c;
-    this.crownPivot = [0, this.head.c[1] + this.head.ry * 0.7, -0.05];
+    this.crownPivot = [0, this.head.c[1] + 0.08, -0.12];
     this.buildCrown();
     this.buildEars();
     this.computeBounds();
@@ -103,14 +107,20 @@ export class Anatomy {
       this.lobes.push({ a, b: add(a, dir, len), r1, r2, flat });
     };
     switch (this.spec.crown) {
-      case 'fronds':
-        // Five chunky fingers, deliberately uneven so the silhouette has personality.
-        lobe(-68, 0.3, 0.12, 0.14, 0.72, -0.2, 0.7);
-        lobe(-36, 0.4, 0.125, 0.152, 0.72, -0.18, 0.66);
-        lobe(-3, 0.45, 0.13, 0.158, 0.72, -0.16, 0.62);
-        lobe(31, 0.38, 0.125, 0.15, 0.72, -0.18, 0.66);
-        lobe(63, 0.28, 0.115, 0.138, 0.72, -0.2, 0.7);
+      case 'fronds': {
+        // Six long, flat paddles fanning out from behind the head, overlapping at
+        // the base and widening toward rounded tips. Lengths are deliberately uneven.
+        const P = this.crownPivot;
+        const fan: [number, number, number][] = [[-92, 0.86, 0.17], [-60, 0.98, 0.19], [-27, 1.06, 0.2], [6, 1.08, 0.2], [39, 0.98, 0.19], [72, 0.86, 0.175]];
+        for (const [deg, len, rTip] of fan) {
+          const rad = (deg * Math.PI) / 180;
+          // Lean back more toward the top so the mane frames the face from behind.
+          const back = -0.3 - 0.25 * Math.cos(rad);
+          const dir = normalize([Math.sin(rad), Math.cos(rad) * 0.95, back]);
+          this.lobes.push({ a: add(P, dir, 0.3), b: add(P, dir, len), r1: 0.12, r2: rTip, flat: 0.48 });
+        }
         break;
+      }
       case 'buds':
         for (const [deg, len, r] of [[-78, 0.1, 0.13], [-52, 0.14, 0.15], [-24, 0.17, 0.16], [6, 0.18, 0.165], [34, 0.15, 0.155], [60, 0.12, 0.14], [82, 0.08, 0.12]] as const) {
           lobe(deg, len, r * 0.9, r, 0.82, -0.05, 0.86);
@@ -152,8 +162,8 @@ export class Anatomy {
   private placeEyes() {
     const [cx, cy] = this.head.c;
     for (const side of [1, -1] as const) {
-      const x = cx + 0.235 * side;
-      const y = cy + 0.04;
+      const x = cx + 0.262 * side;
+      const y = cy + 0.05;
       const hit = this.raycast([x, y, 2], [0, 0, -1], this.headOnly);
       const p = hit ? hit.p : ([x, y, 0.3] as V3);
       const n = hit ? hit.n : ([0, 0, 1] as V3);
@@ -166,7 +176,9 @@ export class Anatomy {
   private headField(x: number, y: number, z: number) {
     const h = this.head;
     const px = x - h.c[0], py = y - h.c[1], pz = z - h.c[2];
-    const er = Math.sqrt((px / h.rx) ** 2 + (py / h.ry) ** 2);
+    // Squircle outline: rounder-square than an ellipse, like a soft disc.
+    const q = h.squircle;
+    const er = (Math.abs(px / h.rx) ** q + Math.abs(py / h.ry) ** q) ** (1 / q);
     // Distance to an elliptical rim (approximate, scaled by the minor radius).
     const radial = (er - 1) * Math.min(h.rx, h.ry) * (er > 1 ? 1 : 0.92);
     // Face and back of the head are gently domed.
@@ -196,20 +208,22 @@ export class Anatomy {
   }
 
   private bodyField(x: number, y: number, z: number) {
-    let d = sdEllipsoid(x, y - 0.63, z, 0.33, 0.35, 0.27);
-    d = smin(d, sdEllipsoid(x, y - 0.5, z - 0.025, 0.34, 0.25, 0.28), 0.1);
-    d = smin(d, sdRoundCone(x, y, z, 0, 0.88, 0, 0, 1.08, 0, 0.16, 0.15), 0.08);
+    // Chest, a soft belly and hips that flow into long, sturdy legs.
+    let d = sdEllipsoid(x, y - 0.96, z, 0.35, 0.36, 0.28);
+    d = smin(d, sdEllipsoid(x, y - 0.82, z - 0.03, 0.36, 0.27, 0.29), 0.1);
+    d = smin(d, sdEllipsoid(x, y - 0.66, z + 0.01, 0.31, 0.17, 0.25), 0.08);
+    d = smin(d, sdRoundCone(x, y, z, 0, 1.18, 0, 0, 1.42, 0, 0.17, 0.15), 0.08);
     const ax = Math.abs(x);
-    d = smin(d, sdRoundCone(ax, y, z, 0.145, 0.42, 0, 0.16, 0.11, 0.02, 0.118, 0.122), 0.07);
-    d = smin(d, sdEllipsoid(ax - 0.165, y - 0.075, z - 0.065, 0.128, 0.075, 0.16), 0.06);
+    d = smin(d, sdRoundCone(ax, y, z, 0.15, 0.66, 0, 0.165, 0.13, 0.02, 0.135, 0.14), 0.07);
+    d = smin(d, sdEllipsoid(ax - 0.17, y - 0.08, z - 0.07, 0.14, 0.085, 0.17), 0.06);
     return d;
   }
 
   private armField(x: number, y: number, z: number, i: 0 | 1) {
     const s = this.shoulders[i], e = this.elbows[i], h = this.hands[i];
-    let d = sdRoundCone(x, y, z, s[0], s[1], s[2], e[0], e[1], e[2], 0.1, 0.09);
-    d = smin(d, sdRoundCone(x, y, z, e[0], e[1], e[2], h[0], h[1], h[2], 0.09, 0.094), 0.04);
-    d = smin(d, sdEllipsoid(x - h[0], y - h[1] + 0.02, z - h[2], 0.108, 0.115, 0.1), 0.05);
+    let d = sdRoundCone(x, y, z, s[0], s[1], s[2], e[0], e[1], e[2], 0.118, 0.102);
+    d = smin(d, sdRoundCone(x, y, z, e[0], e[1], e[2], h[0], h[1], h[2], 0.102, 0.104), 0.04);
+    d = smin(d, sdEllipsoid(x - h[0], y - h[1] + 0.025, z - h[2], 0.122, 0.13, 0.112), 0.05);
     return d;
   }
 
@@ -248,7 +262,7 @@ export class Anatomy {
     const crownPts: V3[] = this.lobes.flatMap((l) => [l.a, l.b]);
     const leaf = (L: Leaf) => sphereOf([L.root, add(L.root, L.u, L.length)], Math.max(L.width, L.length * 0.1) + 0.03);
     this.partBounds = [
-      [0, 0.6, 0, 0.62],
+      [0, 0.75, 0, 0.82],
       [h.c[0], h.c[1] - (h.jowl ? 0.05 : 0), h.c[2], Math.hypot(Math.max(h.rx, h.ry), h.depth + h.bulge) + 0.08],
       sphereOf([this.shoulders[0], this.elbows[0], this.hands[0]], 0.13),
       sphereOf([this.shoulders[1], this.elbows[1], this.hands[1]], 0.13),
@@ -305,7 +319,7 @@ export class Anatomy {
   }
 
   bounds(): { min: V3; max: V3 } {
-    return { min: [-1.0, -0.03, -0.48], max: [1.0, 2.66, 0.52] };
+    return { min: [-1.14, -0.03, -0.82], max: [1.14, 3.2, 0.6] };
   }
 }
 

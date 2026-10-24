@@ -9,11 +9,11 @@ export type CameraView = 'three-quarter' | 'front' | 'side' | 'back' | 'close';
 type Vec = [number, number, number];
 export const VIEWS: Record<CameraView, { position: Vec; target: Vec }> = {
   // Targets sit a little low so the character floats above the conversation dock.
-  'three-quarter': { position: [2.3, 1.6, 5.9], target: [0, 0.98, 0] },
-  front: { position: [0, 1.3, 6.4], target: [0, 1.0, 0] },
-  side: { position: [6, 1.45, 0.2], target: [0, 1.18, 0] },
-  back: { position: [-1.6, 1.6, -5.8], target: [0, 1.18, 0] },
-  close: { position: [0.95, 1.95, 3.9], target: [0, 1.62, 0] },
+  'three-quarter': { position: [2.85, 2.05, 7.4], target: [0, 1.3, 0] },
+  front: { position: [0, 1.7, 8], target: [0, 1.32, 0] },
+  side: { position: [7.6, 1.9, 0.3], target: [0, 1.45, 0] },
+  back: { position: [-2, 2.1, -7.3], target: [0, 1.45, 0] },
+  close: { position: [1.15, 2.4, 4.8], target: [0, 2.02, 0] },
 };
 
 interface StageProps {
@@ -27,8 +27,8 @@ interface StageProps {
 /** Distance multiplier so the whole character fits narrow (portrait) screens. */
 function fitScale(aspect: number) {
   const halfTan = Math.tan(THREE.MathUtils.degToRad(15));
-  const needed = 1.25 / (halfTan * aspect);
-  return Math.max(1, needed / 5.9);
+  const needed = 1.45 / (halfTan * aspect);
+  return Math.max(1, needed / 7.4);
 }
 
 /**
@@ -52,7 +52,7 @@ function CameraRig({ view, focus, controls }: { view: CameraView; focus: number;
     const k = view === 'close' ? Math.min(fitScale(aspect), 1.25) : fitScale(aspect);
     const f = view === 'close' ? 0 : focus;
     // Conversation framing: closer, aimed at the face.
-    target.current.set(v.target[0], v.target[1] + (1.28 - v.target[1]) * f, v.target[2]);
+    target.current.set(v.target[0], v.target[1] + (1.72 - v.target[1]) * f, v.target[2]);
     const dist = k * (1 - 0.24 * f);
     goal.current.set(...v.position).sub(new THREE.Vector3(...v.target)).multiplyScalar(dist).add(target.current);
     animating.current = true;
@@ -107,8 +107,8 @@ export function Stage({ children, view, orbit, focus = 0 }: StageProps) {
         enablePan={false}
         enableDamping
         dampingFactor={0.08}
-        minDistance={2.6}
-        maxDistance={14}
+        minDistance={3.2}
+        maxDistance={17}
         minPolarAngle={0.35}
         maxPolarAngle={Math.PI / 2 - 0.02}
       />

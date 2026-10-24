@@ -49,6 +49,8 @@ export type ToonMaterial = THREE.ShaderMaterial & {
     uBrowArch: { value: number };
     uBrowSide: { value: number };
     uBrowHalf: { value: number };
+    uWobble: { value: THREE.Vector3 };
+    uWobbleRange: { value: THREE.Vector2 };
   };
 };
 
@@ -63,6 +65,8 @@ uniform float uBrowOuter;
 uniform float uBrowArch;
 uniform float uBrowSide;
 uniform float uBrowHalf;
+uniform vec3 uWobble;
+uniform vec2 uWobbleRange;
 #ifdef USE_MASKS
 attribute vec4 aMask;
 attribute float aAO;
@@ -89,6 +93,9 @@ void main() {
   float cheekMask = smoothstep(-0.9, 0.45, aMask.z);
   transformed += objectNormal * uCheek * cheekMask * 0.02;
   transformed.y -= uJaw * aMask.x * 0.032;
+  // Soft-body lag: the head and crown trail motion like a firm jelly.
+  float wob = smoothstep(uWobbleRange.x, uWobbleRange.y, position.y);
+  transformed += uWobble * wob * wob;
   #endif
   #include <skinning_vertex>
   #include <project_vertex>
@@ -172,6 +179,8 @@ export function createToonMaterial(o: ToonOptions = {}): ToonMaterial {
       uBrowArch: { value: 0 },
       uBrowSide: { value: 1 },
       uBrowHalf: { value: 0.11 },
+      uWobble: { value: new THREE.Vector3() },
+      uWobbleRange: { value: new THREE.Vector2(1.5, 3.1) },
       ...LIGHT_RIG,
     },
     vertexShader: vertex,

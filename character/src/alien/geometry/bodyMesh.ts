@@ -42,7 +42,7 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
   const lobeW = new Float32Array(lobes.length);
   const softness = [0.04, 0.04, 0.025, 0.025, 0.03, 0.03, 0.035];
   const h = anatomy.head;
-  const blushC = [1, -1].map((s) => [h.c[0] + 0.4 * s, h.c[1] - 0.1]);
+  const blushC = [1, -1].map((s) => [h.c[0] + 0.45 * s, h.c[1] - 0.12]);
 
   for (let v = 0; v < count; v++) {
     const x = positions[v * 3], y = positions[v * 3 + 1], z = positions[v * 3 + 2];
@@ -115,7 +115,7 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
     for (const l of anatomy.lobes) {
       const dx = l.b[0] - l.a[0], dy = l.b[1] - l.a[1], dz = l.b[2] - l.a[2];
       const t = ((x - l.a[0]) * dx + (y - l.a[1]) * dy + (z - l.a[2]) * dz) / (dx * dx + dy * dy + dz * dz);
-      tip = Math.max(tip, sstep(-0.2, 1.1, t) * sstep(0.4, 0.8, w[PART.crown]));
+      tip = Math.max(tip, sstep(anatomy.spec.crown === 'fronds' ? 0.1 : -0.2, 1.1, t) * sstep(0.4, 0.8, w[PART.crown]));
     }
     for (const ear of [0, 1] as const) {
       const L = anatomy.ears[ear];
@@ -128,15 +128,15 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
     let blush = -1;
     if (nz > 0.45 && w[PART.head] > 0.5) {
       for (const c of blushC) {
-        const e = Math.sqrt(((x - c[0]) / 0.115) ** 2 + ((y - c[1]) / 0.072) ** 2);
+        const e = Math.sqrt(((x - c[0]) / 0.125) ** 2 + ((y - c[1]) / 0.08) ** 2);
         blush = Math.max(blush, 1 - e);
       }
     }
     masks[v * 4 + 2] = blush;
     // Jaw region: the face below the mouth drops when the jaw opens.
-    const mouthY = h.c[1] - 0.135;
+    const mouthY = h.c[1] - 0.165;
     masks[v * 4] = sstep(mouthY + 0.02, mouthY - 0.14, y) * sstep(0.2, 0.6, nz) * (1 - sstep(0.22, 0.48, Math.abs(x))) * w[PART.head];
-    masks[v * 4 + 3] = w[PART.head] + w[PART.crown] + w[PART.earL] + w[PART.earR] > 0.5 ? 1 : sstep(0.0, 1.0, y);
+    masks[v * 4 + 3] = w[PART.head] + w[PART.crown] + w[PART.earL] + w[PART.earR] > 0.5 ? 1 : sstep(0.0, anatomy.neck[1], y);
 
     // --- Ambient occlusion -------------------------------------------------
     let occ = 0;

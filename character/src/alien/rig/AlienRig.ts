@@ -40,7 +40,7 @@ interface LobeRig {
   jz: Jiggle;
 }
 
-const BROW_HALF: Record<BrowShape, number> = { pill: 0.11, arched: 0.1, tuft: 0.085, dots: 0.065, none: 0.1 };
+const BROW_HALF: Record<BrowShape, number> = { pill: 0.125, arched: 0.1, tuft: 0.085, dots: 0.065, none: 0.1 };
 
 interface AntennaRig {
   bones: THREE.Bone[];
@@ -99,6 +99,10 @@ export class AlienRig {
   private earJiggle = [new Jiggle(150, 8), new Jiggle(150, 8)];
   private crownJiggle = { x: new Jiggle(110, 6.5), z: new Jiggle(110, 6.5) };
   private headJiggle = new Jiggle(90, 10);
+  // Overlapping action: the head trails the body's turns, then catches up.
+  private headLag = { z: new Jiggle(70, 9), x: new Jiggle(70, 9) };
+  private lastRoot = { z: 0, x: 0 };
+  private wobble = { x: new Jiggle(120, 8), y: new Jiggle(140, 9), z: new Jiggle(120, 8) };
   private lastHeadQuat = new THREE.Quaternion();
   private lastHeadPos = new THREE.Vector3();
   private headVel = new THREE.Vector3();
@@ -240,7 +244,7 @@ export class AlienRig {
     const a = this.anatomy;
     for (const lm of a.eyes) {
       const c = lm.center;
-      const hit = a.raycast([c[0] + lm.side * 0.012, c[1] + 0.205, 2], [0, 0, -1]);
+      const hit = a.raycast([c[0] + lm.side * 0.014, c[1] + 0.232, 2], [0, 0, -1]);
       const p = hit ? hit.p : ([c[0], c[1] + 0.2, c[2]] as V3);
       const n = hit ? v3(hit.n) : new THREE.Vector3(0, 0, 1);
       const anchor = new THREE.Group();
@@ -259,7 +263,7 @@ export class AlienRig {
 
   private sampleMouthPatch() {
     const a = this.anatomy;
-    const yc = a.head.c[1] - 0.135;
+    const yc = a.head.c[1] - 0.165;
     const patch = new Float32Array(PATCH_X * PATCH_Y * 6);
     for (let j = 0; j < PATCH_Y; j++) {
       for (let i = 0; i < PATCH_X; i++) {
@@ -537,7 +541,13 @@ export class AlienRig {
     }
 
     const hj = this.headJiggle.update(-b.rootRz * 0.4, dt);
-    this.head.rotation.set(b.headRx, b.headRy, b.headRz + hj * 0.3);
+    const rootVz = dt > 0 ? (b.rootRz - this.lastRoot.z) / dt : 0;
+    const rootVx = dt > 0 ? (b.rootRx - this.lastRoot.x) / dt : 0;
+    this.lastRoot.z = b.rootRz;
+    this.lastRoot.x = b.rootRx;
+    const lagZ = this.headLag.z.update(clamp(-rootVz * 0.12, -0.12, 0.12) * this.jiggleScale, dt);
+    const lagX = this.headLag.x.update(clamp(-rootVx * 0.12, -0.12, 0.12) * this.jiggleScale, dt);
+    this.head.rotation.set(b.headRx + lagX, b.headRy, b.headRz + hj * 0.3 + lagZ);
     this.armL.rotation.set(b.armLx, 0, b.armLz);
     this.armR.rotation.set(b.armRx, 0, b.armRz);
     this.foreL.rotation.set(b.elbowLx, 0, b.elbowL);
@@ -556,6 +566,16 @@ export class AlienRig {
       const cz = this.crownJiggle.z.update(clamp(-spinZ * 0.03 - this.headVel.x * 0.12, -0.3, 0.3) * js, dt);
       const cx = this.crownJiggle.x.update(clamp(-spinX * 0.03 + this.headVel.y * 0.18 - this.headVel.z * 0.1, -0.3, 0.3) * js, dt);
       if (pose.kick > 0) this.crownJiggle.x.kick(-3 * pose.kick);
+      // Jelly lag of the upper head and crown, from the head's motion (mover space).
+      const inv = this.mover.getWorldQuaternion(new THREE.Quaternion()).invert();
+      const v = this.tmp2.copy(this.headVel).applyQuaternion(inv);
+      const wu = this.skinMat.uniforms.uWobble.value;
+      wu.set(
+        this.wobble.x.update(clamp(-v.x * 0.035, -0.04, 0.04) * js, dt),
+        this.wobble.y.update(clamp(-v.y * 0.05 - b.squash * 0.25, -0.05, 0.05) * js, dt),
+        this.wobble.z.update(clamp(-v.z * 0.035, -0.04, 0.04) * js, dt),
+      );
+      if (pose.kick > 0) this.wobble.y.kick(0.6 * pose.kick);
       this.crown.rotation.set(cx, 0, cz);
       this.updateLobes(pose, dt, spinZ, b.earL);
       const jl = this.earJiggle[0].update(clamp(spinZ * 0.04 + this.headVel.y * 0.2, -0.4, 0.4) * js, dt);
@@ -587,7 +607,7 @@ export class AlienRig {
     const ripple = (0.022 + pose.flourish * 0.08) * this.jiggleScale;
     for (const l of this.lobes) {
       const side = Math.sign(l.lean) || 0;
-      const up = mood > 0 ? mood * 0.12 : mood * 0.42; // + toward upright, − droop outward
+      const up = mood > 0 ? mood * 0.12 : mood * 0.28; // + toward upright, − droop outward
       const wave = Math.sin(t * (1.15 + pose.flourish * 4) - l.index * 0.95) * ripple;
       const sway = Math.sin(t * 0.85 - l.index * 0.7) * ripple * 0.7;
       const jz = l.jz.update(clamp(-spinZ * 0.035 - this.headVel.x * 0.15, -0.35, 0.35) * this.jiggleScale, dt);
