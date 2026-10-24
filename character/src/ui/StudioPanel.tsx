@@ -11,7 +11,7 @@ import type { CameraView } from '../scene/Stage';
 
 export interface Appearance {
   kind?: 'alien' | 'human';
-  figure?: 'lady' | 'man';
+  figure?: 'lady' | 'man' | 'noor';
   palette: PaletteName;
   eyeShape: EyeShape;
   browShape: BrowShape;

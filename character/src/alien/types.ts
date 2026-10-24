@@ -39,11 +39,11 @@ export type ExpressionName =
   | 'determined'
   | 'confused';
 
-export type PaletteName = 'grape' | 'tangerine' | 'mint' | 'bubblegum' | 'lagoon' | 'mira' | 'theo';
+export type PaletteName = 'grape' | 'tangerine' | 'mint' | 'bubblegum' | 'lagoon' | 'mira' | 'theo' | 'noor';
 
 /** Which character body to build. */
 export type CharacterKind = 'alien' | 'human';
-export type HumanFigure = 'lady' | 'man';
+export type HumanFigure = 'lady' | 'man' | 'noor';
 export type EyeShape = 'oval' | 'round' | 'almond' | 'droplet';
 export type BrowShape = 'pill' | 'arched' | 'tuft' | 'dots' | 'none';
 export type HeadShape = 'puck' | 'pebble' | 'bun';

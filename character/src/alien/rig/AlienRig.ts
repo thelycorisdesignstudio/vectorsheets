@@ -81,6 +81,8 @@ export class AlienRig {
   private armR = new THREE.Bone();
   private foreL = new THREE.Bone();
   private foreR = new THREE.Bone();
+  private handL = new THREE.Bone();
+  private handR = new THREE.Bone();
   private earL = new THREE.Bone();
   private earR = new THREE.Bone();
   private crown = new THREE.Bone();
@@ -142,6 +144,8 @@ export class AlienRig {
     named(this.armR, 'arm_R');
     named(this.foreL, 'forearm_L');
     named(this.foreR, 'forearm_R');
+    named(this.handL, 'hand_L');
+    named(this.handR, 'hand_R');
     named(this.earL, 'ear_L');
     named(this.earR, 'ear_R');
     named(this.crown, 'crown');
@@ -150,6 +154,8 @@ export class AlienRig {
     this.armR.position.copy(v3(a.shoulders[1]));
     this.foreL.position.copy(v3(a.elbows[0]).sub(v3(a.shoulders[0])));
     this.foreR.position.copy(v3(a.elbows[1]).sub(v3(a.shoulders[1])));
+    this.handL.position.copy(v3(a.hands[0]).sub(v3(a.elbows[0])));
+    this.handR.position.copy(v3(a.hands[1]).sub(v3(a.elbows[1])));
     this.earL.position.copy(v3(a.ears[0].root)).sub(this.neck);
     this.earR.position.copy(v3(a.ears[1].root)).sub(this.neck);
     this.crown.position.copy(v3(a.crownPivot)).sub(this.neck);
@@ -157,6 +163,8 @@ export class AlienRig {
     this.hips.add(this.armL, this.armR);
     this.armL.add(this.foreL);
     this.armR.add(this.foreR);
+    this.foreL.add(this.handL);
+    this.foreR.add(this.handR);
     this.head.add(this.earL, this.earR, this.crown);
     // One bone per crown lobe so each can move with the mood and ripple on its own.
     a.lobes.slice(0, MAX_LOBES).forEach((l, i) => {
@@ -218,7 +226,7 @@ export class AlienRig {
 
     this.mover.updateMatrixWorld(true);
     // Skeleton order must match the bone slots baked by bodyMesh (BONE + lobe bones).
-    const bones = [this.hips, this.head, this.armL, this.armR, this.earL, this.earR, this.crown, this.foreL, this.foreR];
+    const bones = [this.hips, this.head, this.armL, this.armR, this.earL, this.earR, this.crown, this.foreL, this.foreR, this.handL, this.handR];
     for (let i = 0; i < MAX_LOBES; i++) bones[LOBE_BONE_BASE + i] = this.lobes[i]?.bone ?? this.crown;
     this.body.bind(new THREE.Skeleton(bones));
     this.setPalette(palette);
@@ -621,13 +629,15 @@ export class AlienRig {
     this.lastRoot.x = b.rootRx;
     const lagZ = this.headLag.z.update(clamp(-rootVz * 0.12, -0.12, 0.12) * this.jiggleScale, dt);
     const lagX = this.headLag.x.update(clamp(-rootVx * 0.12, -0.12, 0.12) * this.jiggleScale, dt);
-    this.head.rotation.set(b.headRx + lagX, b.headRy, b.headRz + hj * 0.3 + lagZ);
+    this.head.rotation.set(b.headRx + lagX, b.headRy, b.headRz + hj * 0.3 + lagZ + (this.anatomy.restPose.headRz ?? 0));
     // Animation layers on top of the character's resting stance.
     const r = this.anatomy.restPose;
-    this.armL.rotation.set(b.armLx + r.armLx, 0, b.armLz + r.armLz);
-    this.armR.rotation.set(b.armRx + r.armRx, 0, b.armRz + r.armRz);
-    this.foreL.rotation.set(b.elbowLx + r.elbowLx, 0, b.elbowL + r.elbowL);
-    this.foreR.rotation.set(b.elbowRx + r.elbowRx, 0, b.elbowR + r.elbowR);
+    this.armL.rotation.set(b.armLx + r.armLx, r.armLy ?? 0, b.armLz + r.armLz);
+    this.armR.rotation.set(b.armRx + r.armRx, r.armRy ?? 0, b.armRz + r.armRz);
+    this.foreL.rotation.set(b.elbowLx + r.elbowLx, r.elbowLy ?? 0, b.elbowL + r.elbowL);
+    this.foreR.rotation.set(b.elbowRx + r.elbowRx, r.elbowRy ?? 0, b.elbowR + r.elbowR);
+    this.handL.rotation.set(0, r.handLy ?? 0, 0);
+    this.handR.rotation.set(0, r.handRy ?? 0, 0);
 
     // Secondary motion driven by the head's motion through space.
     this.head.updateMatrixWorld();
@@ -754,7 +764,7 @@ export class AlienRig {
     const open = clamp(f.mouthOpen, 0, 1.1);
     const round = clamp(f.mouthRound, 0, 1);
     const smile = clamp(f.smile, -1, 1.4);
-    const W = 0.14 * clamp(f.mouthWidth, 0.4, 1.6) * (1 - 0.22 * round) * (1 + 0.15 * open);
+    const W = 0.14 * (this.anatomy.face.mouthScale ?? 1) * clamp(f.mouthWidth, 0.4, 1.6) * (1 - 0.22 * round) * (1 + 0.15 * open);
     const minT = 0.03;
     const out = this.patchScratch;
     for (let i = 0; i < MOUTH_COLS; i++) {

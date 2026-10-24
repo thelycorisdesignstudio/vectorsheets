@@ -16,10 +16,10 @@ import {
 
 export const PART = { body: 0, head: 1, armL: 2, armR: 3, earL: 4, earR: 5, crown: 6 } as const;
 export const PART_COUNT = 7;
-/** Bone slots: parts plus forearms (split from the arm part by the elbow). */
-export const BONE = { hips: 0, head: 1, armL: 2, armR: 3, earL: 4, earR: 5, crown: 6, foreL: 7, foreR: 8 } as const;
+/** Bone slots: parts plus forearms and hands (split from the arm part at the elbow and wrist). */
+export const BONE = { hips: 0, head: 1, armL: 2, armR: 3, earL: 4, earR: 5, crown: 6, foreL: 7, foreR: 8, handL: 9, handR: 10 } as const;
 /** Each crown lobe gets its own bone after the fixed ones. */
-export const LOBE_BONE_BASE = 9;
+export const LOBE_BONE_BASE = 11;
 export const MAX_LOBES = 8;
 
 export interface AnatomySpec {
@@ -29,7 +29,7 @@ export interface AnatomySpec {
   /** species: the alien (default) or a stylised human */
   kind?: 'alien' | 'human';
   /** human figure */
-  figure?: 'lady' | 'man';
+  figure?: 'lady' | 'man' | 'noor';
 }
 
 /** A bangle worn on a forearm: arm index, position along elbow→hand (0..1), colour, tube radius. */
@@ -44,6 +44,10 @@ export interface Bangle {
 export interface RestPose {
   armLx: number; armLz: number; elbowLx: number; elbowL: number;
   armRx: number; armRz: number; elbowRx: number; elbowR: number;
+  /** forearm twist (turns the palm), and a resting head tilt */
+  elbowLy?: number; elbowRy?: number; armLy?: number; armRy?: number; headRz?: number;
+  /** wrist twist (shares the palm turn with the forearm so the elbow never pinches) */
+  handLy?: number; handRy?: number;
 }
 
 export interface HeadDef {
@@ -97,6 +101,8 @@ export interface FaceLayout {
   blush: { dx: number; dy: number; rx: number; ry: number };
   /** strength of a drawn upper lash line (0 = none) */
   liner?: number;
+  /** mouth width relative to the face scale (1 = default) */
+  mouthScale?: number;
   /** resting pupil/iris size as a fraction of the eye (Oru: big, dark, glossy) */
   pupilBase?: number;
   /** resting openness of the upper lids (1 = fully open) */

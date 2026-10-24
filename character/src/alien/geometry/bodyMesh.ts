@@ -100,14 +100,20 @@ export function buildBodyMesh(spec: AnatomySpec, cell: number): BodyMeshData {
       }
     } else bw[BONE.crown] = w[PART.crown];
     // Split each arm between upper arm and forearm around the elbow.
-    for (const [part, upper, fore, i] of [[PART.armL, BONE.armL, BONE.foreL, 0], [PART.armR, BONE.armR, BONE.foreR, 1]] as const) {
-      const s = anatomy.shoulders[i], e = anatomy.elbows[i];
+    for (const [part, upper, fore, hand, i] of [[PART.armL, BONE.armL, BONE.foreL, BONE.handL, 0], [PART.armR, BONE.armR, BONE.foreR, BONE.handR, 1]] as const) {
+      const s = anatomy.shoulders[i], e = anatomy.elbows[i], h = anatomy.hands[i];
       const dx = e[0] - s[0], dy = e[1] - s[1], dz = e[2] - s[2];
       const len = Math.hypot(dx, dy, dz);
       const t = ((x - e[0]) * dx + (y - e[1]) * dy + (z - e[2]) * dz) / len;
       const f = sstep(-0.07, 0.07, t);
+      // Wrist: the hand rides its own bone, blended across a short span.
+      const hx = h[0] - e[0], hy = h[1] - e[1], hz = h[2] - e[2];
+      const hl = Math.hypot(hx, hy, hz);
+      const th = ((x - h[0]) * hx + (y - h[1]) * hy + (z - h[2]) * hz) / hl;
+      const g = sstep(-0.05, 0.02, th);
       bw[upper] = w[part] * (1 - f);
-      bw[fore] = w[part] * f;
+      bw[fore] = w[part] * f * (1 - g);
+      bw[hand] = w[part] * f * g;
     }
     order.sort((a, b) => bw[b] - bw[a]);
     let top = 0;
