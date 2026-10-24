@@ -59,6 +59,8 @@ interface OutfitDef {
   /** torso width factor: fitted tops are slimmer than a boxy tee */
   fit: number;
   shoe: { c: V3; r: V3 };
+  /** trainers (sole, toe box, heel collar) instead of a simple flat shoe */
+  sneaker?: boolean;
   shirtTop: number;
   /** shoulder straps: [inner x, outer x, top y] */
   strap: [number, number, number] | null;
@@ -80,7 +82,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     cranium: { c: [0, 2.92, -0.02], r: [0.255, 0.28, 0.27] },
     jaw: { c: [0, 2.8, 0.02], r: [0.235, 0.185, 0.23] },
     chin: { c: [0, 2.665, 0.07], r: [0.062, 0.055, 0.08] },
-    nose: { c: [0, 2.825, 0.252], r: [0.02, 0.026, 0.024] },
+    nose: { c: [0, 2.825, 0.248], r: [0.016, 0.02, 0.019] },
     neck: { a: [0, 2.44, -0.01], b: [0, 2.72, -0.02], r: 0.058 },
     chest: { c: [0, 2.3, 0], r: [0.33, 0.2, 0.19] },
     waist: { c: [0, 2.04, 0], r: [0.32, 0.25, 0.2] },
@@ -101,7 +103,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     // Weight on one hip: left hand on the hip, right forearm raised and turned
     // palm-up in an open, presenting gesture, head tipped a little.
     restPose: { armLx: 0.14, armLz: 0.55, elbowLx: 0, elbowL: -1.26, armRx: -0.05, armRz: -0.24, armRy: -0.75, elbowRx: -1.3, elbowR: 0, elbowRy: -0.45, handRy: -1.1, headRz: 0.09 },
-    face: { scale: 0.36, eyeSpread: 0.102, eyeLift: 0.02, browOffset: 0.075, mouthOffset: 0.14, blush: { dx: 0.135, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 1, lidRest: 0.72, pupilBase: 0.2, mouthScale: 0.85 },
+    face: { scale: 0.36, eyeSpread: 0.102, eyeLift: 0.02, browOffset: 0.075, mouthOffset: 0.14, blush: { dx: 0.135, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 1, lidRest: 0.74, pupilBase: 0.36, mouthScale: 0.85, eyeStyle: 'flat' },
     bangles: [
       // A stack of beaded colours on the presenting wrist, one gold bangle on the other.
       { arm: 1, t: 0.8, color: '#3fa7a0', tube: 0.011 },
@@ -116,7 +118,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     cranium: { c: [0, 2.95, -0.02], r: [0.265, 0.29, 0.28] },
     jaw: { c: [0, 2.81, 0.02], r: [0.248, 0.2, 0.24] },
     chin: { c: [0, 2.69, 0.07], r: [0.11, 0.07, 0.09] },
-    nose: { c: [0, 2.845, 0.265], r: [0.03, 0.038, 0.034] },
+    nose: { c: [0, 2.845, 0.258], r: [0.022, 0.027, 0.025] },
     neck: { a: [0, 2.44, -0.01], b: [0, 2.74, -0.02], r: 0.075 },
     chest: { c: [0, 2.3, 0], r: [0.37, 0.2, 0.2] },
     waist: { c: [0, 2.02, 0], r: [0.33, 0.26, 0.2] },
@@ -135,7 +137,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     blush: 0.15,
     legs: { x: 0.15, thighR: 0.14, kneeY: 0.95, kneeR: 0.08, ankleR: 0.055, calfR: 0.088 },
     restPose: { armLx: -0.04, armLz: -0.07, elbowLx: -0.24, elbowL: 0.04, armRx: -0.04, armRz: 0.07, elbowRx: -0.24, elbowR: -0.04 },
-    face: { scale: 0.36, eyeSpread: 0.106, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.14, blush: { dx: 0.14, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 0, lidRest: 0.9, pupilBase: 0.44 },
+    face: { scale: 0.36, eyeSpread: 0.106, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.14, blush: { dx: 0.14, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 0.6, lidRest: 0.86, pupilBase: 0.36, eyeStyle: 'flat' },
     bangles: [],
   },
   // A rounder face and fuller figure: curly hair gathered into a high puff,
@@ -145,7 +147,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     cranium: { c: [0, 2.9, -0.02], r: [0.27, 0.28, 0.275] },
     jaw: { c: [0, 2.78, 0.02], r: [0.255, 0.2, 0.235] },
     chin: { c: [0, 2.655, 0.07], r: [0.095, 0.065, 0.085] },
-    nose: { c: [0, 2.805, 0.258], r: [0.027, 0.03, 0.028] },
+    nose: { c: [0, 2.805, 0.252], r: [0.021, 0.024, 0.022] },
     neck: { a: [0, 2.42, -0.01], b: [0, 2.7, -0.02], r: 0.064 },
     chest: { c: [0, 2.28, 0.01], r: [0.37, 0.21, 0.22] },
     waist: { c: [0, 2.02, 0], r: [0.355, 0.26, 0.22] },
@@ -164,7 +166,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     blush: 0.25,
     legs: { x: 0.16, thighR: 0.155, kneeY: 0.95, kneeR: 0.085, ankleR: 0.055, calfR: 0.092 },
     restPose: { armLx: -0.1, armLz: -0.05, elbowLx: -1.05, elbowL: -1.0, armRx: -0.1, armRz: 0.05, elbowRx: -1.05, elbowR: 1.0, headRz: -0.05 },
-    face: { scale: 0.38, eyeSpread: 0.108, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.135, blush: { dx: 0.15, dy: -0.06, rx: 0.045, ry: 0.026 }, liner: 1, lidRest: 0.95, pupilBase: 0.3, mouthScale: 0.85 },
+    face: { scale: 0.38, eyeSpread: 0.108, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.135, blush: { dx: 0.15, dy: -0.06, rx: 0.045, ry: 0.026 }, liner: 1, lidRest: 0.9, pupilBase: 0.36, mouthScale: 0.85, eyeStyle: 'flat' },
     bangles: [],
   },
 };
@@ -181,13 +183,15 @@ function outfitFor(fig: Figure, outfit: Outfit, d: FigureDef): OutfitDef {
   };
   if (outfit === 'casual' || (outfit === 'dress' && fig === 'man')) return casual;
   const sneaker = { c: [L.x * 0.98, 0.075, 0.06] as V3, r: [0.095, 0.08, 0.18] as V3 };
-  const base: OutfitDef = { ...casual, sleeve: null, trousers: null, bareLegs: true, blouse: false, shoe: sneaker, shoeTop: 0.15, folds: 0 };
+  const base: OutfitDef = { ...casual, sleeve: null, trousers: null, bareLegs: true, blouse: false, shoe: sneaker, sneaker: true, shoeTop: 0.15, folds: 0 };
   if (outfit === 'workout') {
     if (fig === 'man') {
       // Gym: a vest with wide straps, loose shorts to just above the knee, trainers.
       return {
         ...base, fit: 0.95, shorts: { top: [L.x, 1.74, 0], bottom: [L.x + 0.015, 1.12, 0.01], r1: 0.185, r2: 0.165 },
         shirtTop: d.neckline - 0.03, strap: [0.1, 0.25, 2.75], shirtBottom: 1.8, pantsTop: 1.82, pantsBottom: 1.06, folds: 0.004, bangles: [],
+        // White crew socks above the trainers.
+        shoeTop: 0.3,
       };
     }
     // Studio: a sports top (bare midriff for Mira), high-waisted leggings, trainers and a fitness band.
@@ -203,7 +207,7 @@ function outfitFor(fig: Figure, outfit: Outfit, d: FigureDef): OutfitDef {
   return {
     ...base, fit: 0.92, skirt: { top: [0, d.waistY + 0.02, 0], bottom: [0, 0.95, 0.02], r1: d.waist.r[0] * 0.86, r2: fig === 'noor' ? 0.42 : 0.37 },
     shirtTop: d.neckline - 0.05, strap: [0.09, 0.17, 2.75], shirtBottom: 0.93, pantsTop: -1, pantsBottom: -1,
-    shoe: { c: [L.x, 0.04, 0.06], r: [0.072, 0.042, 0.135] }, shoeTop: 0.09, folds: 0.006, bangles: d.bangles,
+    shoe: { c: [L.x, 0.04, 0.06], r: [0.072, 0.042, 0.135] }, sneaker: false, shoeTop: 0.09, folds: 0.006, bangles: d.bangles,
   };
 }
 
@@ -300,7 +304,7 @@ export class HumanAnatomy extends Anatomy {
     h = smin(h, e(d.nose), 0.03);
     // Soft nose bridge and cheekbones: the planes that make a face read as a face.
     const n = d.nose.c;
-    h = smin(h, sdRoundCone(x, y, z, 0, n[1] + 0.085, n[2] - 0.035, n[0], n[1] + 0.01, n[2] - 0.004, 0.012, 0.019), 0.035);
+    h = smin(h, sdRoundCone(x, y, z, 0, n[1] + 0.08, n[2] - 0.03, n[0], n[1] + 0.01, n[2] - 0.006, 0.008, 0.013), 0.03);
     const ax = Math.abs(x);
     h = smin(h, sdEllipsoid(ax - d.jaw.r[0] * 0.58, y - (n[1] - 0.005), z - d.jaw.c[2] - d.jaw.r[2] * 0.6, 0.075, 0.048, 0.07), 0.05);
     return h;
@@ -436,10 +440,21 @@ export class HumanAnatomy extends Anatomy {
       b = smin(b, sk, 0.03);
     }
     const s = o.shoe;
-    b = smin(b, sdEllipsoid(ax - s.c[0], y - s.c[1], z - s.c[2], s.r[0], s.r[1], s.r[2]), 0.04);
+    b = smin(b, o.sneaker ? this.sneakerField(ax, y, z, s) : sdEllipsoid(ax - s.c[0], y - s.c[1], z - s.c[2], s.r[0], s.r[1], s.r[2]), 0.04);
     // A loose tee blouses softly over the waistband.
     if (o.blouse) b = smin(b, sdEllipsoid(x, y - (d.waistY + 0.045), z - d.waist.c[2], d.waist.r[0] * 1.02, 0.055, d.waist.r[2] * 1.06), 0.03);
     return Math.max(b, -y);
+  }
+
+  /** A trainer: a flat sole with a slight lip, a rounded toe box and a raised heel collar. */
+  private sneakerField(ax: number, y: number, z: number, s: { c: V3; r: V3 }) {
+    const x = ax - s.c[0], zz = z - s.c[2];
+    const w = s.r[0], len = s.r[2];
+    let d = sdEllipsoid(x, y - 0.03, zz, w * 1.06, 0.032, len * 1.03);
+    d = smin(d, sdEllipsoid(x, y - 0.062, zz + len * 0.08, w, 0.06, len * 0.86), 0.025);
+    d = smin(d, sdEllipsoid(x, y - 0.048, zz - len * 0.5, w * 0.94, 0.042, len * 0.48), 0.02);
+    d = smin(d, sdEllipsoid(x, y - 0.1, zz + len * 0.55, w * 0.88, 0.055, len * 0.32), 0.02);
+    return Math.max(d, -y);
   }
 
   /** Anatomical legs (for shorts, leggings and skirts): thigh, knee, calf and ankle. */
@@ -489,12 +504,13 @@ export class HumanAnatomy extends Anatomy {
     // Palm and back of the hand.
     let d0 = sdEllipsoid(u - 0.045, v, w, 0.054, 0.044, 0.021);
     // Fingers: index (front) to little finger (back), gently curled toward the palm.
-    const fingers: [number, number, number][] = [[0.025, 0.047, 0.0148], [0.0085, 0.052, 0.0152], [-0.0085, 0.049, 0.0148], [-0.024, 0.04, 0.0135]];
+    // Long, slender and slightly apart, like a drawn hand.
+    const fingers: [number, number, number][] = [[0.028, 0.06, 0.0136], [0.0095, 0.066, 0.014], [-0.0095, 0.062, 0.0136], [-0.027, 0.05, 0.0124]];
     for (const [fv, len, r] of fingers) {
       const u0 = 0.082, mid = u0 + len * 0.55;
       const seg1 = sdRoundCone(u, v, w, u0, fv, 0, mid, fv * 1.05, 0.006, r, r * 0.95);
       const seg2 = sdRoundCone(u, v, w, mid, fv * 1.05, 0.006, u0 + len, fv * 1.08, 0.02, r * 0.95, r * 0.86);
-      d0 = smin(d0, Math.min(seg1, seg2), 0.016);
+      d0 = smin(d0, Math.min(seg1, seg2), 0.011);
     }
     // Thumb: from the heel of the palm, forward and down, resting against the index.
     const thumb = Math.min(

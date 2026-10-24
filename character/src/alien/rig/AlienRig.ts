@@ -130,6 +130,8 @@ export class AlienRig {
     this.root.name = 'Character';
     this.root.add(this.mover);
 
+    // The human cast is cel shaded (crisp shadow shapes); the alien species stays soft.
+    LIGHT_RIG.uCel.value = this.anatomy.spec.kind === 'human' ? 1 : 0;
     this.skinMat = createToonMaterial({ masks: true });
     this.skinMat.uniforms.uWobbleRange.value.set(...this.anatomy.wobbleRange);
     this.antennaMat = createToonMaterial({ gradient: [0, 0.3] });

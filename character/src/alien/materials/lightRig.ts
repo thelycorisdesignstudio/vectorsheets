@@ -21,6 +21,8 @@ export const LIGHT_RIG = {
   uAOStrength: { value: 1 },
   /** hand-drawn look (0 = soft 3D, 1 = illustrated): painted shadow shapes, pencil edges, paper grain */
   uIllustrate: { value: 1 },
+  /** cel shading for the human cast: crisp light/shadow shapes with a warm band where skin turns into shadow */
+  uCel: { value: 0 },
 };
 
 export type LightRigUniforms = typeof LIGHT_RIG;
@@ -35,11 +37,13 @@ uniform vec3 uRimTint;
 uniform float uSpec;
 uniform float uAOStrength;
 uniform float uIllustrate;
+uniform float uCel;
 
 float rigHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
 // Stylised lighting: returns the lit colour for an albedo.
-vec3 rigLight(vec3 albedo, vec3 N, vec3 V, vec3 viewPos, vec3 shadowMul, float ao, float shade, float specScale) {
+// warm: 1 on skin (gets the warm terminator band in cel mode), 0 on cloth and hair.
+vec3 rigLightW(vec3 albedo, vec3 N, vec3 V, vec3 viewPos, vec3 shadowMul, float ao, float shade, float specScale, float warm) {
   // Soft box: a large close light, so even flat planes get a gentle falloff.
   vec3 toKey = uKeyPos - viewPos;
   float dKey = length(toKey);
@@ -48,6 +52,9 @@ vec3 rigLight(vec3 albedo, vec3 N, vec3 V, vec3 viewPos, vec3 shadowMul, float a
   float key = smoothstep(-0.55, 0.95, dot(N, Lk)) * falloff;
   // Illustrated: the light/shadow split becomes a painted shape with a soft, brushed edge.
   key = mix(key, smoothstep(0.32, 0.6, key) * mix(0.82, 1.0, key), 0.6 * uIllustrate);
+  // Cel: one clean shadow shape that follows the form (only surfaces turned from the light).
+  float nl = dot(N, uKeyDir);
+  key = mix(key, smoothstep(-0.32, -0.24, nl) * mix(0.9, 1.0, smoothstep(0.0, 0.6, nl)), uCel);
   float fill = max(dot(N, uFillDir), 0.0);
   float sky = 0.5 + 0.5 * N.y;
   float light = mix(0.2, 1.0, key) * mix(0.86, 1.0, sky);
@@ -66,15 +73,22 @@ vec3 rigLight(vec3 albedo, vec3 N, vec3 V, vec3 viewPos, vec3 shadowMul, float a
   col += mix(albedo, vec3(1.0), 0.35) * edge * 0.14 * shade;
   // Broad satin highlight: soft, low, never glossy.
   vec3 H = normalize(Lk + V);
-  float spec = pow(max(dot(N, H), 0.0), 10.0) * uSpec * occl * specScale * 0.7 * smoothstep(0.25, 0.65, facing) * (1.0 - 0.55 * uIllustrate);
+  float spec = pow(max(dot(N, H), 0.0), 10.0) * uSpec * occl * specScale * 0.7 * smoothstep(0.25, 0.65, facing) * (1.0 - 0.55 * uIllustrate) * (1.0 - 0.6 * uCel);
   col += vec3(spec) * 0.16 * shade;
   // Illustrated: a soft coloured pencil line where forms turn away, and paper grain.
-  float line = smoothstep(0.24, 0.07, facing) * shade;
+  // Where skin turns from light into shadow it glows warm, like light through skin.
+  float term = smoothstep(-0.44, -0.3, nl) * (1.0 - smoothstep(-0.26, -0.12, nl));
+  col = mix(col, col * vec3(1.2, 0.74, 0.64) + vec3(0.04, 0.0, 0.0), term * warm * uCel * 0.6 * shade);
+  float line = smoothstep(0.24, 0.07, facing) * shade * (1.0 - 0.6 * uCel);
   col = mix(col, albedo * shadowMul * 0.62, line * 0.7 * uIllustrate);
   float grain = rigHash(floor(gl_FragCoord.xy / 1.6)) - 0.5;
   col *= 1.0 + grain * 0.055 * uIllustrate;
   // Gentle shoulder so highlights never clip harshly.
   col -= max(col - 0.92, 0.0) * 0.55;
   return col;
+}
+
+vec3 rigLight(vec3 albedo, vec3 N, vec3 V, vec3 viewPos, vec3 shadowMul, float ao, float shade, float specScale) {
+  return rigLightW(albedo, N, V, viewPos, shadowMul, ao, shade, specScale, 0.0);
 }
 `;

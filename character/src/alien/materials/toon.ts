@@ -192,7 +192,11 @@ void main() {
   vec3 shadowMul = uShadowMul;
   #endif
   vec3 V = normalize(vViewDir);
+  #ifdef USE_MASKS
+  vec3 col = rigLightW(albedo, N, V, vViewPos, shadowMul, ao, uShade, uSpecScale, 1.0 - cloth);
+  #else
   vec3 col = rigLight(albedo, N, V, vViewPos, shadowMul, ao, uShade, uSpecScale);
+  #endif
   // Soft-vinyl sheen: light seems to glow just under the surface at the rim.
   float graze = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.6);
   col += uSheen * graze * 0.3 * ao;

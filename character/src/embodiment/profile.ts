@@ -102,7 +102,7 @@ export const MIRA_PROFILE: CharacterProfile = {
     voice: { rate: 1.03, pitch: 1.1, preferredVoices: ['Samantha', 'Google UK English Female', 'Microsoft Aria', 'Karen'] },
   },
   appearance: {
-    kind: 'human', figure: 'lady', hair: 'ponytail', outfit: 'workout', palette: 'mira', head: 'puck', crown: 'fronds', ears: 'none',
+    kind: 'human', figure: 'lady', hair: 'bob', outfit: 'workout', palette: 'mira', head: 'puck', crown: 'fronds', ears: 'none',
     eyeShape: 'almond', browShape: 'arched', accessories: [],
   },
   behaviour: {
