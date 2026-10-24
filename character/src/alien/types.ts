@@ -45,7 +45,7 @@ export type PaletteName = 'grape' | 'tangerine' | 'mint' | 'bubblegum' | 'lagoon
 export type CharacterKind = 'alien' | 'human';
 export type HumanFigure = 'lady' | 'man' | 'noor';
 /** Human hairstyles (any figure can wear any style). */
-export type HairStyle = 'bob' | 'ponytail' | 'crop' | 'curls' | 'buzz' | 'puff';
+export type HairStyle = 'bob' | 'lob' | 'waves' | 'ponytail' | 'crop' | 'curls' | 'buzz' | 'puff';
 /** Human outfits: everyday clothes, gym wear, or a sundress. */
 export type Outfit = 'casual' | 'workout' | 'dress';
 export type EyeShape = 'oval' | 'round' | 'almond' | 'droplet';

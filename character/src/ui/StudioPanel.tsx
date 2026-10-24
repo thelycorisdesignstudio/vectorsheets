@@ -36,7 +36,7 @@ export interface AnimSettings {
 const HEADS: Record<HeadShape, string> = { puck: 'Puck', pebble: 'Pebble', bun: 'Bun' };
 const CROWNS: Record<CrownFeature, string> = { fronds: 'Fronds', buds: 'Buds', antennae: 'Antennae', ears: 'Ears', sprout: 'Sprout', tendrils: 'Tendrils' };
 const EARS: Record<EarStyle, string> = { none: 'None', nubs: 'Nubs', fins: 'Fins' };
-const HAIR: Record<HairStyle, string> = { bob: 'Bob', ponytail: 'Ponytail', crop: 'Crop', curls: 'Curls', buzz: 'Buzz', puff: 'Puff' };
+const HAIR: Record<HairStyle, string> = { bob: 'Bob', lob: 'Long bob', waves: 'Long waves', ponytail: 'Ponytail', crop: 'Crop', curls: 'Curls', buzz: 'Buzz', puff: 'Puff' };
 const OUTFITS: Record<Outfit, string> = { casual: 'Casual', workout: 'Workout', dress: 'Dress' };
 const MAN_OUTFITS: Partial<Record<Outfit, string>> = { casual: 'Casual', workout: 'Workout' };
 const ACCESSORIES: Record<Accessory, string> = { collar: 'Collar', spectacles: 'Spectacles', bloom: 'Bloom' };

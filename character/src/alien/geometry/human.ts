@@ -332,6 +332,8 @@ export class HumanAnatomy extends Anatomy {
   private hairStyle(x: number, y: number, z: number, c: number, skull: number) {
     // A cap a uniform thickness proud of the head itself (never thin anywhere).
     const cap = (t: number) => skull - t;
+    // Never let hair wrap the jaw or chin: clear everything low and in front.
+    const clearJaw = (h: number) => smax(h, -Math.max(y - (c - 0.1), -0.05 - z), 0.03);
     // Shared cuts: the face opening and the nape line (higher at the sides than the back).
     const face = (top = 0.272, k = 0.025) => (h: number) => smax(h, -sdEllipsoid(x, y - (c - 0.05), z - 0.245, 0.222, top, 0.205), k);
     // The line rises from the nape to clear the ears at the sides, then on to the temples.
@@ -352,6 +354,44 @@ export class HumanAnatomy extends Anatomy {
         const ang = Math.atan2(x, z + 0.03);
         // Big, chunky locks (drawn hair) rather than fine strands.
         h += 0.0055 * Math.sin(ang * 12 + 0.9 * Math.sin(y * 7)) * sstep(c + 0.22, c - 0.05, y);
+        return h;
+      }
+      case 'lob': {
+        // Shoulder-length, straight and sleek, covering the ears, the ends
+        // tucking in a touch, with a side-swept fringe lock across one brow.
+        let h = smin(cap(0.035), sdRoundCone(x, y, z, 0, c + 0.05, -0.045, 0, c - 0.36, -0.065, 0.3, 0.33), 0.06);
+        h = smax(h, -sdEllipsoid(x, y - (c - 0.05), z - 0.25, 0.214, 0.29, 0.205), 0.03);
+        h = smax(h, c - 0.42 - y + 0.04 * Math.max(0, z + 0.05), 0.025);
+        h = smax(h, Math.abs(x) - (0.335 - 0.03 * sstep(c - 0.25, c - 0.42, y)), 0.03);
+        h = smin(h, sdRoundCone(x, y, z, -0.07, c + 0.3, 0.19, 0.19, c + 0.115, 0.232, 0.052, 0.042), 0.045);
+        h += 0.004 * Math.sin(Math.atan2(x, z + 0.04) * 10 + 0.8 * Math.sin(y * 6)) * sstep(c + 0.15, c - 0.1, y);
+        return clearJaw(h);
+      }
+      case 'waves': {
+        // Long, flowing waves: volume on top, a centre part, two big front
+        // locks that sweep over the temples and flick out in wings, and broad
+        // panels falling behind the shoulders to the chest.
+        let h = smin(cap(0.03), sdEllipsoid(x, y - (c + 0.1), z + 0.02, 0.31, 0.3, 0.31), 0.05);
+        h = smax(h, -sdEllipsoid(x, y - (c - 0.04), z - 0.25, 0.2, 0.25, 0.2), 0.03);
+        h = clearJaw(h);
+        // Back panel: a thick sheet draping behind the shoulders.
+        const zz = (z + 0.3) / 0.38;
+        let back = sdRoundCone(x, y, zz, 0, c - 0.02, 0, 0, c - 0.74, -0.05, 0.3, 0.37) * 0.38;
+        back = smax(back, c - 0.82 - y, 0.04);
+        back += 0.006 * Math.sin(x * 26 + 1.2 * Math.sin(y * 5)) * sstep(c - 0.1, c - 0.4, y);
+        h = smin(h, back, 0.08);
+        // Side falls behind the ears, onto the shoulders.
+        const ax = Math.abs(x);
+        h = smin(h, sdRoundCone(ax, y, z, 0.25, c - 0.02, -0.06, 0.34, c - 0.46, -0.12, 0.1, 0.12), 0.06);
+        // Front wings, mirrored: from the part over the temple, flicking out.
+        const wing = Math.min(
+          sdRoundCone(ax, y, z, 0.03, c + 0.27, 0.2, 0.25, c + 0.11, 0.19, 0.07, 0.092),
+          sdRoundCone(ax, y, z, 0.25, c + 0.11, 0.19, 0.37, c - 0.05, 0.08, 0.092, 0.07),
+          sdRoundCone(ax, y, z, 0.37, c - 0.05, 0.08, 0.44, c - 0.03, 0.02, 0.07, 0.04),
+        );
+        h = smin(h, wing, 0.045);
+        // A soft centre part.
+        h = smax(h, -sdEllipsoid(x, y - (c + 0.33), z - 0.12, 0.012, 0.06, 0.16), 0.015);
         return h;
       }
       case 'ponytail': {
@@ -582,7 +622,7 @@ export class HumanAnatomy extends Anatomy {
     const c = this.head.c;
     this.partBounds[PART.body] = [0, d.neckline / 2, 0, d.neckline / 2 + 0.2];
     this.partBounds[PART.head] = [c[0], c[1], c[2], this.head.ry * 1.25];
-    this.partBounds[PART.crown] = [0, c[1] + 0.1, -0.02, this.head.ry * 2];
+    this.partBounds[PART.crown] = [0, c[1] - 0.1, -0.05, this.head.ry * 3.4];
     for (const i of [0, 1] as const) {
       const s = this.shoulders[i], h = this.hands[i];
       this.partBounds[PART.armL + i] = [(s[0] + h[0]) / 2, (s[1] + h[1]) / 2, 0.03, 0.42];
