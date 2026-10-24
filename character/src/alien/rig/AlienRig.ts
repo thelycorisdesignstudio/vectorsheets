@@ -701,7 +701,8 @@ export class AlienRig {
       const px = clamp((yaw - pose.vergence * e.side) * 0.85, -0.42, 0.42);
       const py = clamp(-pitch * 0.85, -0.4, 0.4);
       u.uPupilPos.value.set(px, py);
-      u.uPupilSize.value = clamp(0.28 + f.pupil * 0.5, 0.24, 0.74);
+      const base = this.anatomy.face.pupilBase ?? 0.28;
+      u.uPupilSize.value = clamp(base + f.pupil * 0.5, base - 0.06, 0.86);
     }
   }
 

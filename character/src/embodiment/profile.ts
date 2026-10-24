@@ -68,7 +68,7 @@ export const ORU_PROFILE: CharacterProfile = {
     ears: 'none',
     eyeShape: 'oval',
     browShape: 'pill',
-    accessories: ['collar'],
+    accessories: [],
   },
   behaviour: {
     defaultExpression: 'neutral',

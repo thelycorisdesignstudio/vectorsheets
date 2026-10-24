@@ -104,8 +104,12 @@ export function createEyeMaterial(side: 1 | -1, aspect: number): EyeMaterial {
         // Sclera: soft spherical shading toward the rim for volume.
         float rr = dot(p, p);
         vec3 sclera = uSclera * mix(1.0, 0.86, smoothstep(0.35, 1.0, rr));
-        // Pupil: a touch lighter toward its edge so it reads as a lens, not a dot.
-        vec3 pupilCol = mix(uPupil, uPupil * 1.35 + 0.04, smoothstep(uPupilSize * 0.45, uPupilSize, r));
+        // Iris: light pools in the lower half, a darker limbal ring at the edge
+        // and a deep core, so a big dark eye still reads as glossy and alive.
+        float ry = d.y / max(uPupilSize, 1e-3);
+        vec3 irisCol = mix(uPupil * 0.9, uPupil * 1.9 + 0.05, smoothstep(0.1, -0.85, ry));
+        irisCol = mix(irisCol, uPupil * 0.55, smoothstep(uPupilSize * 0.78, uPupilSize, r));
+        vec3 pupilCol = mix(uPupil * 0.3, irisCol, smoothstep(uPupilSize * 0.42 - pa, uPupilSize * 0.42 + pa, r));
         vec3 eye = mix(sclera, pupilCol, pupil);
         // Catchlights stay with the light; they ride half of the pupil motion.
         vec2 cp = p - (vec2(-0.3 * uSide - 0.08, 0.36) + uPupilPos * 0.5);

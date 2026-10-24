@@ -1,6 +1,6 @@
 import type { CrownFeature, EarStyle, HeadShape } from '../types';
 import {
-  type Leaf, type V3, add, cross, makeLeaf, normalize, sdEllipsoid, sdLeaf, sdRoundCone, smax, smin,
+  type Leaf, type V3, add, cross, makeLeaf, normalize, sdEllipsoid, sdLeaf, sdRoundCone, smin,
 } from './sdf';
 
 /**
@@ -56,7 +56,7 @@ export interface HeadDef {
 
 const HEADS: Record<HeadShape, HeadDef> = {
   // A thick disc: flat friendly face plane, crisp but soft bevel, fuller back.
-  puck: { c: [0, 1.86, 0], rx: 0.76, ry: 0.6, depth: 0.29, round: 0.15, bulge: 0.025, backBulge: 0.13, squircle: 2.25 },
+  puck: { c: [0, 1.86, 0], rx: 0.76, ry: 0.6, depth: 0.34, round: 0.27, bulge: 0.07, backBulge: 0.16, squircle: 2.25 },
   pebble: { c: [0, 1.88, 0], rx: 0.67, ry: 0.66, depth: 0.28, round: 0.2, bulge: 0.06, backBulge: 0.13, squircle: 2 },
   bun: { c: [0, 1.89, 0], rx: 0.7, ry: 0.56, depth: 0.25, round: 0.15, bulge: 0.03, backBulge: 0.13, squircle: 2.2, jowl: { c: [0, 1.66, 0.02], r: [0.66, 0.33, 0.3], k: 0.14 } },
 };
@@ -91,6 +91,8 @@ export interface FaceLayout {
   blush: { dx: number; dy: number; rx: number; ry: number };
   /** strength of a drawn upper lash line (0 = none) */
   liner?: number;
+  /** resting pupil/iris size as a fraction of the eye (Oru: big, dark, glossy) */
+  pupilBase?: number;
   /** resting openness of the upper lids (1 = fully open) */
   lidRest?: number;
 }
@@ -103,7 +105,7 @@ export class Anatomy {
   crownPivot: V3;
   face: FaceLayout = {
     scale: 1, eyeSpread: 0.29, eyeLift: 0.05, browOffset: 0.232, mouthOffset: 0.165,
-    blush: { dx: 0.45, dy: -0.12, rx: 0.125, ry: 0.08 },
+    blush: { dx: 0.45, dy: -0.12, rx: 0.125, ry: 0.08 }, pupilBase: 0.5,
   };
   /** touch collider for the body: centre + radii */
   bellyCollider: { c: V3; r: V3 } = { c: [0, 0.75, 0.02], r: [0.42, 0.5, 0.34] };
@@ -180,7 +182,7 @@ export class Anatomy {
           const dir = normalize([Math.sin(rad), Math.cos(rad) * 0.95, back]);
           const side: V3 = [Math.cos(rad), -Math.sin(rad), 0];
           const n = normalize(cross(dir, side));
-          this.lobes.push({ a: add(P, dir, 0.3), b: add(P, dir, len), r1: 0.1, r2: rTip, flat: 0.4, n });
+          this.lobes.push({ a: add(P, dir, 0.3), b: add(P, dir, len), r1: 0.11, r2: rTip, flat: 0.62, n });
         }
         break;
       }
@@ -291,13 +293,7 @@ export class Anatomy {
     d = smin(d, sdRoundCone(ax, y, z, 0.18, 0.62, 0, 0.185, 0.17, 0.02, 0.168, 0.165), 0.08);
     // Feet: the leg end turns gently forward onto a flat sole.
     d = smin(d, sdEllipsoid(ax - 0.185, y - 0.09, z - 0.07, 0.17, 0.095, 0.2), 0.08);
-    d = Math.max(d, -y);
-    // A small V crease where the legs meet the belly.
-    const groove = Math.min(
-      sdRoundCone(ax, y, z, 0.16, 0.69, 0.25, 0, 0.575, 0.285, 0.009, 0.009),
-      sdRoundCone(ax, y, z, 0, 0.575, 0.285, 0, 0.5, 0.27, 0.009, 0.006),
-    );
-    return smax(d, -groove, 0.035);
+    return Math.max(d, -y);
   }
 
   protected armField(x: number, y: number, z: number, i: 0 | 1) {

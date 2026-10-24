@@ -159,7 +159,8 @@ void main() {
   albedo = mix(uColorLow, uColor, vMask.w);
   albedo = mix(albedo, uTip, smoothstep(0.0, 1.0, vMask.y));
   float blushEdge = fwidth(vMask.z) * 1.2 + 0.004;
-  albedo = mix(albedo, uBlush, smoothstep(-blushEdge, blushEdge, vMask.z) * uBlushAmount);
+  // Airbrushed blush: soft from the rim, densest in the middle.
+  albedo = mix(albedo, uBlush, smoothstep(-blushEdge, 0.6, vMask.z) * 0.78 * uBlushAmount);
   ao = mix(0.5, 1.0, vAO);
   // Clothed characters: crisp colour regions for hair and clothes.
   vec4 rg = smoothstep(0.38, 0.62, vRegion);

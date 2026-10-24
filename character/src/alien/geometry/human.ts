@@ -59,7 +59,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     neckline: 2.5,
     ears: false,
     headScale: 1.1,
-    face: { scale: 0.36, eyeSpread: 0.102, eyeLift: 0.02, browOffset: 0.075, mouthOffset: 0.14, blush: { dx: 0.135, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 1, lidRest: 0.8 },
+    face: { scale: 0.36, eyeSpread: 0.102, eyeLift: 0.02, browOffset: 0.075, mouthOffset: 0.14, blush: { dx: 0.135, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 1, lidRest: 0.8, pupilBase: 0.44 },
     bangles: [
       { arm: 0, t: 0.82, color: '#3fa7a0', tube: 0.011 },
       { arm: 0, t: 0.87, color: '#e9b43c', tube: 0.01 },
@@ -87,7 +87,7 @@ const FIGURES: Record<Figure, FigureDef> = {
     neckline: 2.5,
     ears: true,
     headScale: 1.1,
-    face: { scale: 0.36, eyeSpread: 0.106, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.14, blush: { dx: 0.14, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 0, lidRest: 0.9 },
+    face: { scale: 0.36, eyeSpread: 0.106, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.14, blush: { dx: 0.14, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 0, lidRest: 0.9, pupilBase: 0.44 },
     bangles: [],
   },
 };
