@@ -32,7 +32,7 @@ export interface AnimSettings {
 }
 
 const HEADS: Record<HeadShape, string> = { puck: 'Puck', pebble: 'Pebble', bun: 'Bun' };
-const CROWNS: Record<CrownFeature, string> = { fronds: 'Fronds', buds: 'Buds', antennae: 'Antennae', ears: 'Ears', sprout: 'Sprout' };
+const CROWNS: Record<CrownFeature, string> = { fronds: 'Fronds', buds: 'Buds', antennae: 'Antennae', ears: 'Ears', sprout: 'Sprout', tendrils: 'Tendrils' };
 const EARS: Record<EarStyle, string> = { none: 'None', nubs: 'Nubs', fins: 'Fins' };
 const ACCESSORIES: Record<Accessory, string> = { collar: 'Collar', spectacles: 'Spectacles', bloom: 'Bloom' };
 const VIEWS: Record<CameraView, string> = { hero: 'Hero', 'three-quarter': '¾', front: 'Front', side: 'Side', back: 'Back', close: 'Close' };

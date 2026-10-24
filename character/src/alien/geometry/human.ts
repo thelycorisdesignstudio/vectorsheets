@@ -1,10 +1,10 @@
-import { Anatomy, type AnatomySpec, type Bangle, type FaceLayout, type HeadDef, PART } from './anatomy';
+import { Anatomy, type AnatomySpec, type Bangle, type FaceLayout, type HeadDef, PART, type RestPose } from './anatomy';
 import { type V3, makeLeaf, sdEllipsoid, sdRoundCone, smax, smin, sstep } from './sdf';
 
 /**
  * Stylised human figures in the same soft, clay-like language as Oru:
  * an egg-shaped head with soft cheeks, chin and a button nose; sculpted hair
- * as one volume; slim skin arms with mitten hands; clothing modelled as
+ * as one volume; slim skin arms with relaxed, fingered hands; clothing modelled as
  * volume (puff-sleeved tee, flared trousers, shoes) and coloured by region.
  * Original designs — inspired by the look, not copied from any character.
  */
@@ -22,7 +22,6 @@ interface FigureDef {
   hips: { c: V3; r: V3 };
   sleeve: { a: V3; b: V3; r1: number; r2: number };
   arm: { shoulder: V3; elbow: V3; hand: V3; r: [number, number, number] };
-  mitten: V3;
   leg: { top: V3; bottom: V3; r1: number; r2: number };
   shoe: { c: V3; r: V3 };
   waistY: number;
@@ -33,6 +32,12 @@ interface FigureDef {
   bangles: Bangle[];
   /** uniform scale of head and hair about the chin (1 = as sculpted) */
   headScale?: number;
+  /** hand size (1 = lady) */
+  handScale: number;
+  restPose: RestPose;
+  /** depth of trouser folds */
+  folds: number;
+  blush: number;
 }
 
 const FIGURES: Record<Figure, FigureDef> = {
@@ -49,9 +54,8 @@ const FIGURES: Record<Figure, FigureDef> = {
     chest: { c: [0, 2.3, 0], r: [0.33, 0.2, 0.19] },
     waist: { c: [0, 2.04, 0], r: [0.32, 0.25, 0.2] },
     hips: { c: [0, 1.8, 0], r: [0.3, 0.16, 0.21] },
-    sleeve: { a: [0.3, 2.4, 0], b: [0.41, 2.18, 0.02], r1: 0.115, r2: 0.105 },
+    sleeve: { a: [0.28, 2.39, 0], b: [0.41, 2.17, 0.02], r1: 0.1, r2: 0.098 },
     arm: { shoulder: [0.3, 2.41, 0], elbow: [0.41, 2.1, 0.03], hand: [0.45, 1.77, 0.07], r: [0.052, 0.045, 0.039] },
-    mitten: [0.05, 0.072, 0.028],
     leg: { top: [0.15, 1.62, 0], bottom: [0.235, 0.33, 0.02], r1: 0.2, r2: 0.25 },
     shoe: { c: [0.24, 0.055, 0.1], r: [0.085, 0.055, 0.14] },
     waistY: 1.86,
@@ -59,6 +63,11 @@ const FIGURES: Record<Figure, FigureDef> = {
     neckline: 2.5,
     ears: false,
     headScale: 1.1,
+    handScale: 1.08,
+    folds: 0.007,
+    blush: 0.3,
+    // Weight on one hip: left hand resting on the hip, right arm loose and a little forward.
+    restPose: { armLx: 0.14, armLz: 0.55, elbowLx: 0, elbowL: -1.26, armRx: -0.04, armRz: -0.07, elbowRx: -0.32, elbowR: 0.14 },
     face: { scale: 0.36, eyeSpread: 0.102, eyeLift: 0.02, browOffset: 0.075, mouthOffset: 0.14, blush: { dx: 0.135, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 1, lidRest: 0.8, pupilBase: 0.44 },
     bangles: [
       { arm: 0, t: 0.82, color: '#3fa7a0', tube: 0.011 },
@@ -77,16 +86,19 @@ const FIGURES: Record<Figure, FigureDef> = {
     chest: { c: [0, 2.3, 0], r: [0.37, 0.2, 0.2] },
     waist: { c: [0, 2.02, 0], r: [0.33, 0.26, 0.2] },
     hips: { c: [0, 1.8, 0], r: [0.3, 0.16, 0.2] },
-    sleeve: { a: [0.34, 2.38, 0], b: [0.45, 2.19, 0.02], r1: 0.1, r2: 0.1 },
+    sleeve: { a: [0.31, 2.37, 0], b: [0.45, 2.18, 0.02], r1: 0.092, r2: 0.094 },
     arm: { shoulder: [0.34, 2.41, 0], elbow: [0.46, 2.09, 0.03], hand: [0.5, 1.76, 0.07], r: [0.06, 0.053, 0.047] },
-    mitten: [0.058, 0.08, 0.034],
-    leg: { top: [0.16, 1.65, 0], bottom: [0.18, 0.26, 0.02], r1: 0.18, r2: 0.155 },
-    shoe: { c: [0.18, 0.07, 0.08], r: [0.1, 0.075, 0.17] },
+    leg: { top: [0.155, 1.65, 0], bottom: [0.17, 0.24, 0.02], r1: 0.165, r2: 0.135 },
+    shoe: { c: [0.17, 0.07, 0.08], r: [0.1, 0.075, 0.17] },
     waistY: 1.86,
     hemY: 0.17,
     neckline: 2.5,
     ears: true,
     headScale: 1.1,
+    handScale: 1.15,
+    folds: 0.004,
+    blush: 0.15,
+    restPose: { armLx: -0.04, armLz: -0.07, elbowLx: -0.24, elbowL: 0.04, armRx: -0.04, armRz: 0.07, elbowRx: -0.24, elbowR: -0.04 },
     face: { scale: 0.36, eyeSpread: 0.106, eyeLift: 0.02, browOffset: 0.08, mouthOffset: 0.14, blush: { dx: 0.14, dy: -0.06, rx: 0.04, ry: 0.024 }, liner: 0, lidRest: 0.9, pupilBase: 0.44 },
     bangles: [],
   },
@@ -116,6 +128,8 @@ export class HumanAnatomy extends Anatomy {
     this.neck = [0, this.head.c[1] - 0.42, 0];
     this.crownPivot = [0, this.head.c[1] + this.head.ry * 0.6, -0.05];
     this.bangles = d.bangles;
+    this.restPose = d.restPose;
+    this.blushStrength = d.blush;
     const mirror = (p: V3): V3 => [-p[0], p[1], p[2]];
     this.shoulders = [d.arm.shoulder, mirror(d.arm.shoulder)];
     this.elbows = [d.arm.elbow, mirror(d.arm.elbow)];
@@ -169,6 +183,11 @@ export class HumanAnatomy extends Anatomy {
     h = smin(h, e(d.jaw), 0.12);
     h = smin(h, e(d.chin), 0.08);
     h = smin(h, e(d.nose), 0.03);
+    // Soft nose bridge and cheekbones: the planes that make a face read as a face.
+    const n = d.nose.c;
+    h = smin(h, sdRoundCone(x, y, z, 0, n[1] + 0.085, n[2] - 0.035, n[0], n[1] + 0.01, n[2] - 0.004, 0.012, 0.019), 0.035);
+    const ax = Math.abs(x);
+    h = smin(h, sdEllipsoid(ax - d.jaw.r[0] * 0.58, y - (n[1] - 0.005), z - d.jaw.c[2] - d.jaw.r[2] * 0.6, 0.075, 0.048, 0.07), 0.05);
     return h;
   }
 
@@ -187,6 +206,9 @@ export class HumanAnatomy extends Anatomy {
       // Face opening; its top drops toward the swept side (+x).
       const fy = y - (c[1] - 0.05) + 0.12 * Math.max(0, x + 0.04);
       h = smax(h, -sdEllipsoid(x - 0.005, fy, z - 0.25, 0.212, 0.265, 0.2), 0.03);
+      // Soft strand clumps running down the length (stronger toward the ends).
+      const ang = Math.atan2(x, z + 0.03);
+      h += 0.0035 * Math.sin(ang * 34 + 0.6 * Math.sin(y * 9)) * sstep(c[1] + 0.25, c[1] - 0.1, y);
       return h;
     }
     // Short crop, sculpted at the old head size (rx 0.45) and scaled to fit.
@@ -218,7 +240,15 @@ export class HumanAnatomy extends Anatomy {
     b = smin(b, sdRoundCone(x, y, z, d.neck.a[0], d.neck.a[1], d.neck.a[2], d.neck.b[0], d.neck.b[1], d.neck.b[2], d.neck.r, d.neck.r * 0.95), 0.05);
     const ax = Math.abs(x);
     const L = d.leg;
-    b = smin(b, sdRoundCone(ax, y, z, L.top[0], L.top[1], L.top[2], L.bottom[0], L.bottom[1], L.bottom[2], L.r1, L.r2), 0.06);
+    let leg = sdRoundCone(ax, y, z, L.top[0], L.top[1], L.top[2], L.bottom[0], L.bottom[1], L.bottom[2], L.r1, L.r2);
+    // Fabric: long soft folds down the trouser legs, gathering toward the hem.
+    const t = sstep(L.top[1], L.bottom[1], y);
+    const lx = L.top[0] + (L.bottom[0] - L.top[0]) * t;
+    const fa = Math.atan2(z - L.top[2], ax - lx);
+    leg += d.folds * Math.sin(fa * 5 + y * 2.2 + Math.sin(fa * 3) * 0.8) * sstep(d.waistY - 0.05, d.waistY - 0.35, y);
+    b = smin(b, leg, 0.06);
+    // The tee blouses softly over the waistband.
+    b = smin(b, sdEllipsoid(x, y - (d.waistY + 0.045), z - d.waist.c[2], d.waist.r[0] * 1.02, 0.055, d.waist.r[2] * 1.06), 0.03);
     const s = d.shoe;
     b = smin(b, sdEllipsoid(ax - s.c[0], y - s.c[1], z - s.c[2], s.r[0], s.r[1], s.r[2]), 0.04);
     return Math.max(b, -y);
@@ -233,11 +263,49 @@ export class HumanAnatomy extends Anatomy {
     a = smin(a, sdRoundCone(x, y, z, el[0], el[1], el[2], h[0], h[1], h[2], r1, r2), 0.025);
     // Loose sleeve rides with the upper arm.
     a = smin(a, this.sleeveField(x, y, z, side), 0.04);
-    // Mitten hand with a small thumb.
-    const m = d.mitten;
-    a = smin(a, sdEllipsoid(x - h[0] - 0.008 * side, y - h[1] + 0.07, z - h[2], m[0], m[1], m[2]), 0.03);
-    a = smin(a, sdRoundCone(x, y, z, h[0] - 0.03 * side, h[1] - 0.03, h[2] + 0.025, h[0] - 0.05 * side, h[1] - 0.075, h[2] + 0.05, 0.022, 0.018), 0.02);
-    return a;
+    return smin(a, this.handField(x, y, z, i), 0.018);
+  }
+
+  /**
+   * A relaxed hand: palm, four slightly curled fingers of different lengths
+   * and a thumb, modelled in the hand's own frame (down the forearm, palm
+   * facing the body).
+   */
+  private handField(x: number, y: number, z: number, i: 0 | 1) {
+    const d = this.def;
+    const k = d.handScale;
+    const el = this.elbows[i], h = this.hands[i];
+    const side = Math.sign(h[0]);
+    // Frame: u down the forearm, w toward the palm side (the body), v forward.
+    let ux = h[0] - el[0], uy = h[1] - el[1], uz = h[2] - el[2];
+    const ul = Math.hypot(ux, uy, uz);
+    ux /= ul; uy /= ul; uz /= ul;
+    let wx = -side - ux * (-side * ux), wy = -uy * (-side * ux), wz = -uz * (-side * ux);
+    const wl = Math.hypot(wx, wy, wz);
+    wx /= wl; wy /= wl; wz /= wl;
+    let vx = uy * wz - uz * wy, vy = uz * wx - ux * wz, vz = ux * wy - uy * wx;
+    if (vz < 0) { vx = -vx; vy = -vy; vz = -vz; }
+    const px = x - h[0], py = y - h[1], pz = z - h[2];
+    const u = (px * ux + py * uy + pz * uz) / k;
+    const v = (px * vx + py * vy + pz * vz) / k;
+    const w = (px * wx + py * wy + pz * wz) / k;
+    // Palm and back of the hand.
+    let d0 = sdEllipsoid(u - 0.045, v, w, 0.054, 0.044, 0.021);
+    // Fingers: index (front) to little finger (back), gently curled toward the palm.
+    const fingers: [number, number, number][] = [[0.025, 0.047, 0.0148], [0.0085, 0.052, 0.0152], [-0.0085, 0.049, 0.0148], [-0.024, 0.04, 0.0135]];
+    for (const [fv, len, r] of fingers) {
+      const u0 = 0.082, mid = u0 + len * 0.55;
+      const seg1 = sdRoundCone(u, v, w, u0, fv, 0, mid, fv * 1.05, 0.006, r, r * 0.95);
+      const seg2 = sdRoundCone(u, v, w, mid, fv * 1.05, 0.006, u0 + len, fv * 1.08, 0.02, r * 0.95, r * 0.86);
+      d0 = smin(d0, Math.min(seg1, seg2), 0.016);
+    }
+    // Thumb: from the heel of the palm, forward and down, resting against the index.
+    const thumb = Math.min(
+      sdRoundCone(u, v, w, 0.025, 0.03, 0.01, 0.065, 0.05, 0.02, 0.016, 0.0135),
+      sdRoundCone(u, v, w, 0.065, 0.05, 0.02, 0.095, 0.052, 0.03, 0.0135, 0.0115),
+    );
+    d0 = smin(d0, thumb, 0.014);
+    return d0 * k;
   }
 
   armRadiusAt(_arm: 0 | 1, t: number) {

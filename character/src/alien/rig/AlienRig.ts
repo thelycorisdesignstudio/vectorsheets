@@ -622,10 +622,12 @@ export class AlienRig {
     const lagZ = this.headLag.z.update(clamp(-rootVz * 0.12, -0.12, 0.12) * this.jiggleScale, dt);
     const lagX = this.headLag.x.update(clamp(-rootVx * 0.12, -0.12, 0.12) * this.jiggleScale, dt);
     this.head.rotation.set(b.headRx + lagX, b.headRy, b.headRz + hj * 0.3 + lagZ);
-    this.armL.rotation.set(b.armLx, 0, b.armLz);
-    this.armR.rotation.set(b.armRx, 0, b.armRz);
-    this.foreL.rotation.set(b.elbowLx, 0, b.elbowL);
-    this.foreR.rotation.set(b.elbowRx, 0, b.elbowR);
+    // Animation layers on top of the character's resting stance.
+    const r = this.anatomy.restPose;
+    this.armL.rotation.set(b.armLx + r.armLx, 0, b.armLz + r.armLz);
+    this.armR.rotation.set(b.armRx + r.armRx, 0, b.armRz + r.armRz);
+    this.foreL.rotation.set(b.elbowLx + r.elbowLx, 0, b.elbowL + r.elbowL);
+    this.foreR.rotation.set(b.elbowRx + r.elbowRx, 0, b.elbowR + r.elbowR);
 
     // Secondary motion driven by the head's motion through space.
     this.head.updateMatrixWorld();
@@ -665,7 +667,7 @@ export class AlienRig {
     this.updateBrows(f);
     this.updateMouth(f);
     this.updateAntennae(pose, dt, f.glow + b.glow);
-    this.skinMat.uniforms.uBlushAmount.value = clamp(0.55 + f.blush * 0.5, 0, 1);
+    this.skinMat.uniforms.uBlushAmount.value = clamp(0.55 + f.blush * 0.5, 0, 1) * this.anatomy.blushStrength;
     this.skinMat.uniforms.uJaw.value = clamp(f.jaw, 0, 1.2);
     this.skinMat.uniforms.uCheek.value = clamp(f.cheek, -0.5, 1.2);
   }

@@ -40,6 +40,12 @@ export interface Bangle {
   tube: number;
 }
 
+/** Resting arm pose offsets (radians), added under every animated pose. */
+export interface RestPose {
+  armLx: number; armLz: number; elbowLx: number; elbowL: number;
+  armRx: number; armRz: number; elbowRx: number; elbowR: number;
+}
+
 export interface HeadDef {
   c: V3;
   rx: number;
@@ -115,6 +121,10 @@ export class Anatomy {
   wobbleRange: [number, number] = [1.5, 3.1];
   lobes: Lobe[] = [];
   /** bangles on the forearms (separate rings, coloured individually) */
+  /** resting arm pose (a relaxed stance instead of an A-pose) */
+  restPose: RestPose = { armLx: 0, armLz: 0, elbowLx: 0, elbowL: 0, armRx: 0, armRz: 0, elbowRx: 0, elbowR: 0 };
+  /** strength of painted cheek blush (1 = full) */
+  blushStrength = 1;
   bangles: Bangle[] = [];
   ears: Leaf[] = [];
   eyes: EyeLandmark[] = [];
@@ -203,6 +213,20 @@ export class Anatomy {
         this.lobes.push({ a: b, b: c, r1: 0.05, r2: 0.12, flat: 0.45 });
         const d = add(b, normalize([-0.9, 0.35, 0]), 0.16);
         this.lobes.push({ a: b, b: d, r1: 0.04, r2: 0.08, flat: 0.45 });
+        break;
+      }
+      case 'tendrils': {
+        // Three short, plump tendrils on top and two long floppy ones hanging
+        // at the sides like pigtails. Round in section, with soft bulb tips.
+        for (const [deg, len] of [[-30, 0.3], [0, 0.4], [30, 0.3]] as const) {
+          const a = rim(deg, 0.82, -0.06);
+          const rad = (deg * Math.PI) / 180;
+          this.lobes.push({ a, b: add(a, normalize([Math.sin(rad) * 0.75, 1, -0.32]), len), r1: 0.12, r2: 0.13, flat: 1 });
+        }
+        for (const side of [1, -1] as const) {
+          const a = rim(76 * side, 0.86, -0.06);
+          this.lobes.push({ a, b: add(a, normalize([0.26 * side, -1, -0.05]), 0.66), r1: 0.15, r2: 0.155, flat: 1 });
+        }
         break;
       }
       case 'antennae':
